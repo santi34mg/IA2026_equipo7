@@ -1,0 +1,21 @@
+idf_component_register(
+    SRCS
+        "main.cpp"
+        "sensor.cpp"
+        "storage.cpp"
+        "test_storage.cpp"
+        "time_service.cpp"
+        "wifi_uploader.cpp"
+    INCLUDE_DIRS "."
+    REQUIRES
+        esp_driver_i2c
+        esp_adc
+        spiffs
+        nvs_flash
+        esp_event
+        esp_netif
+        esp_wifi
+        esp_http_client
+        lwip
+        unity
+)
