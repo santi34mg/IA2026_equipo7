@@ -22,7 +22,7 @@ esp_err_t storage_csv::build_header(char *buffer, size_t buffer_len, size_t *wri
     const int len = snprintf(
         buffer,
         buffer_len,
-        "timestamp_epoch,temp_c,humidity_pct,pressure_pa,adc_raw,adc_mv,bme280_ok,adc_ok\n"
+        "timestamp_epoch,dht11_temp_c,dht11_humidity_pct,moisture_raw,light_raw\n"
     );
     if (len < 0 || static_cast<size_t>(len) >= buffer_len) {
         return ESP_ERR_INVALID_SIZE;
@@ -46,15 +46,12 @@ esp_err_t storage_csv::build_row(
     const int len = snprintf(
         buffer,
         buffer_len,
-        "%" PRId64 ",%.2f,%.2f,%.2f,%d,%d,%d,%d\n",
+        "%" PRId64 ",%.2f,%.2f,%d,%d\n",
         timestamp_epoch,
-        static_cast<double>(data.temperature_c),
-        static_cast<double>(data.humidity_pct),
-        static_cast<double>(data.pressure_pa),
-        data.adc_raw,
-        data.adc_mv,
-        data.bme280_ok ? 1 : 0,
-        data.adc_ok ? 1 : 0
+        static_cast<double>(data.dht11_temperature_c),
+        static_cast<double>(data.dht11_humidity_pct),
+        data.moisture_raw,
+        data.light_raw
     );
     if (len < 0 || static_cast<size_t>(len) >= buffer_len) {
         return ESP_ERR_INVALID_SIZE;
@@ -101,7 +98,7 @@ esp_err_t StorageManager::ensure_csv_header() {
         return ESP_FAIL;
     }
 
-    char header[128] = {};
+    char header[256] = {};
     size_t header_len = 0;
     esp_err_t fmt_ret = storage_csv::build_header(header, sizeof(header), &header_len);
     if (fmt_ret != ESP_OK) {
@@ -119,6 +116,22 @@ esp_err_t StorageManager::ensure_csv_header() {
     }
 
     return ESP_OK;
+}
+
+void StorageManager::dump_csv_to_serial() {
+    FILE *file = fopen(kCsvPath, "r");
+    if (file == nullptr) {
+        ESP_LOGW(TAG, "No CSV file to dump");
+        return;
+    }
+
+    printf("\n--- CSV DUMP START ---\n");
+    char line[256] = {};
+    while (fgets(line, sizeof(line), file) != nullptr) {
+        printf("%s", line);
+    }
+    printf("--- CSV DUMP END ---\n\n");
+    fclose(file);
 }
 
 esp_err_t StorageManager::append_row(int64_t timestamp_epoch, const SensorData &data) {
@@ -146,6 +159,9 @@ esp_err_t StorageManager::append_row(int64_t timestamp_epoch, const SensorData &
         ESP_LOGE(TAG, "Failed to append row to CSV");
         return ESP_FAIL;
     }
+
+    // Stream each new sample to serial as it's logged (row already ends in '\n')
+    printf("%s", row);
 
     return ESP_OK;
 }

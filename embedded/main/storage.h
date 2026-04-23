@@ -16,6 +16,7 @@ class StorageManager {
 public:
     esp_err_t init();
     esp_err_t append_row(int64_t timestamp_epoch, const SensorData &data);
+    void dump_csv_to_serial();
 
 private:
     esp_err_t ensure_csv_header();

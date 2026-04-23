@@ -5,14 +5,22 @@
 #include "esp_err.h"
 
 struct SensorData {
-    bool bme280_ok;
-    float temperature_c;
-    float humidity_pct;
-    float pressure_pa;
+    bool  dht11_ok;
+    float dht11_temperature_c;
+    float dht11_humidity_pct;
 
-    bool adc_ok;
-    int adc_raw;
-    int adc_mv;
+    bool  ks0033_ok;
+    float ks0033_temperature_c;
+
+    bool  moisture_ok;
+    int   moisture_raw;
+    int   moisture_mv;
+    float moisture_pct;  // 0 = dry, 100 = fully wet
+
+    bool  light_ok;
+    int   light_raw;
+    int   light_mv;
+    float light_pct;  // 0 = dark, 100 = maximum light
 };
 
 class SensorManager {
@@ -21,10 +29,13 @@ public:
     esp_err_t read(SensorData &out_data);
 
 private:
-    esp_err_t init_i2c();
-    esp_err_t init_bme280();
-    esp_err_t init_adc();
+    esp_err_t init_dht11();
+    esp_err_t init_ks0033();
+    esp_err_t init_moisture();
+    esp_err_t init_light();
 
-    esp_err_t read_bme280(float &temperature_c, float &humidity_pct, float &pressure_pa);
-    esp_err_t read_adc(int &raw, int &mv);
+    esp_err_t read_dht11(float &temperature_c, float &humidity_pct);
+    esp_err_t read_ks0033(float &temperature_c);
+    esp_err_t read_moisture(int &raw, int &mv, float &pct);
+    esp_err_t read_light(int &raw, int &mv, float &pct);
 };

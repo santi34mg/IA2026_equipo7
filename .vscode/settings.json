@@ -1,3 +1,4 @@
 {
-  "idf.currentSetup": "/home/santisil/.espressif/v6.0/esp-idf"
+  "idf.currentSetup": "/home/santisil/.espressif/v6.0/esp-idf",
+  "cmake.sourceDirectory": "C:/Users/ignac/OneDrive/Escritorio/IA2026_equipo7/embedded"
 }

@@ -7,11 +7,9 @@
 #include "sensor.h"
 #include "storage.h"
 #include "time_service.h"
-#include "wifi_uploader.h"
 
 namespace {
-constexpr uint32_t kSamplePeriodSeconds = 10;
-constexpr uint32_t kTimeSyncWaitSeconds = 15;
+constexpr uint32_t kSamplePeriodMs = 2500;
 constexpr uint32_t kLoggerStackSize = 6144;
 constexpr UBaseType_t kLoggerTaskPriority = 5;
 
@@ -19,10 +17,9 @@ const char *TAG = "app_main";
 
 SensorManager g_sensor_manager;
 StorageManager g_storage_manager;
-WiFiUploader g_wifi_uploader;
 
 void logger_task(void * /*arg*/) {
-    ESP_LOGI(TAG, "Logger task started (period: %" PRIu32 " s)", kSamplePeriodSeconds);
+    ESP_LOGI(TAG, "Logger task started (period: %" PRIu32 " ms)", kSamplePeriodMs);
 
     while (true) {
         SensorData sensor_data{};
@@ -35,11 +32,7 @@ void logger_task(void * /*arg*/) {
             ESP_LOGE(TAG, "Failed to append CSV row");
         }
 
-        if (g_wifi_uploader.send_reading(timestamp_epoch, sensor_data) != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to send sample over Wi-Fi");
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(kSamplePeriodSeconds * 1000U));
+        vTaskDelay(pdMS_TO_TICKS(kSamplePeriodMs));
     }
 }
 }  // namespace
@@ -60,20 +53,12 @@ extern "C" void app_main(void) {
         return;
     }
 
-    ret = g_wifi_uploader.init();
-    if (ret == ESP_ERR_NOT_SUPPORTED) {
-        ESP_LOGW(TAG, "Wi-Fi sender disabled by configuration");
-    } else if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "Wi-Fi sender init failed: %s", esp_err_to_name(ret));
-    }
-
-    ret = TimeService::init_sntp();
-    if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "SNTP init failed: %s", esp_err_to_name(ret));
-    } else {
-        if (!TimeService::wait_for_sync(kTimeSyncWaitSeconds)) {
-            ESP_LOGW(TAG, "Time sync timeout; continuing with current RTC/system time");
-        }
+    // Print only the CSV header at boot so columns are labeled; each new row
+    // is streamed live by append_row() as the sample period elapses.
+    char header[256] = {};
+    size_t header_len = 0;
+    if (storage_csv::build_header(header, sizeof(header), &header_len) == ESP_OK) {
+        printf("%s", header);
     }
 
     BaseType_t task_ok = xTaskCreate(

@@ -5,34 +5,40 @@
 #include "storage.h"
 
 TEST_CASE("storage csv header format is stable", "[storage]") {
-    char buffer[128] = {};
+    char buffer[200] = {};
     size_t written_len = 0;
 
     const esp_err_t ret = storage_csv::build_header(buffer, sizeof(buffer), &written_len);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
 
-    const char *expected = "timestamp_epoch,temp_c,humidity_pct,pressure_pa,adc_raw,adc_mv,bme280_ok,adc_ok\n";
+    const char *expected = "timestamp_epoch,dht11_temp_c,dht11_humidity_pct,moisture_raw,light_raw\n";
     TEST_ASSERT_EQUAL_STRING(expected, buffer);
     TEST_ASSERT_EQUAL(strlen(expected), written_len);
 }
 
 TEST_CASE("storage csv row format is stable", "[storage]") {
     SensorData data = {};
-    data.bme280_ok = true;
-    data.temperature_c = 23.456F;
-    data.humidity_pct = 55.0F;
-    data.pressure_pa = 101325.12F;
-    data.adc_ok = false;
-    data.adc_raw = 2048;
-    data.adc_mv = 1100;
+    data.dht11_ok           = true;
+    data.dht11_temperature_c = 23.456F;
+    data.dht11_humidity_pct  = 55.0F;
+    data.ks0033_ok           = true;
+    data.ks0033_temperature_c = 22.5F;
+    data.moisture_ok         = true;
+    data.moisture_raw        = 1000;
+    data.moisture_mv         = 806;
+    data.moisture_pct        = 75.6F;
+    data.light_ok            = true;
+    data.light_raw           = 2048;
+    data.light_mv            = 1650;
+    data.light_pct           = 50.0F;
 
-    char buffer[160] = {};
+    char buffer[200] = {};
     size_t written_len = 0;
 
     const esp_err_t ret = storage_csv::build_row(buffer, sizeof(buffer), &written_len, 1713696000, data);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
 
-    const char *expected = "1713696000,23.46,55.00,101325.12,2048,1100,1,0\n";
+    const char *expected = "1713696000,23.46,55.00,1000,2048\n";
     TEST_ASSERT_EQUAL_STRING(expected, buffer);
     TEST_ASSERT_EQUAL(strlen(expected), written_len);
 }
