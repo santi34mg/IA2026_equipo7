@@ -15,17 +15,19 @@
 
 namespace {
 
-// DHT11: GPIO4 (bidirectional, 1-wire)
+// DHT11: GPIO27 (bidirectional, 1-wire)
 constexpr gpio_num_t kDht11Pin = GPIO_NUM_27;
+
 
 // KS0033 NTC thermistor: GPIO34 = ADC1_CH6 (ADC1, safe with Wi-Fi)
 constexpr adc_unit_t    kKs0033AdcUnit    = ADC_UNIT_1;
 constexpr adc_channel_t kKs0033AdcChannel = ADC_CHANNEL_6;
 constexpr adc_atten_t   kKs0033Atten      = ADC_ATTEN_DB_12;
-// NTC parameters: 10 kΩ at 25 °C, Beta = 3950
+// NTC parameters: 20 kΩ at 25 °C, Beta = 3950
 // KS0033 onboard divider: VCC → NTC → S(out) → 10 kΩ → GND
 // (no external resistor — module carries its own 10 kΩ)
-constexpr float kNtcR0   = 20000.0f;
+constexpr float kNtcR0      = 20000.0f;  // NTC resistance at 25 °C
+constexpr float kNtcRFixed  = 10000.0f;  // fixed resistor in the divider
 constexpr float kNtcT0   = 298.15f;   // 25 °C in Kelvin
 constexpr float kNtcBeta = 3950.0f;
 
@@ -277,7 +279,7 @@ esp_err_t SensorManager::read_ks0033(float &temperature_c) {
         ESP_LOGW(TAG, "KS0033 voltage out of range: %d mV", mv);
         return ESP_ERR_INVALID_RESPONSE;
     }
-    const float r_ntc    = kNtcR0 * (v_cc - v_out) / v_out;
+    const float r_ntc    = kNtcRFixed * (v_cc - v_out) / v_out;
     const float t_kelvin = 1.0f / (1.0f / kNtcT0 + logf(r_ntc / kNtcR0) / kNtcBeta);
     temperature_c = t_kelvin - 273.15f;
     return ESP_OK;

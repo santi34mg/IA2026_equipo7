@@ -3,9 +3,8 @@ Reads sensor CSV rows from the ESP32 serial port and saves them to a
 timestamped file: data_plant_<YYYYMMDD_HHMMSS>.csv
 
 Usage:
-    python record_csv.py              # auto-detects first available COM port
-    python record_csv.py COM4         # explicit port
-    python record_csv.py COM4 115200  # explicit port + baud rate
+    python record_csv.py            # auto-detects port, no estado column
+    python record_csv.py estado      # auto-detects port, appends ,estado column with value "riego"
 """
 
 import sys
@@ -41,13 +40,16 @@ def make_csv_path() -> pathlib.Path:
     return pathlib.Path(f"data_plant_{ts}.csv")
 
 
-def record(port: str, baud: int, out_path: pathlib.Path) -> None:
+def record(port: str, baud: int, out_path: pathlib.Path, estado: str | None = None) -> None:
     print(f"Opening {port} at {baud} baud")
     print(f"Writing to {out_path}")
+    if estado:
+        print(f"Estado: {estado}")
     print("Press Ctrl+C to stop.\n")
 
     with serial.Serial(port, baud, timeout=2) as ser, open(out_path, "w", newline="", encoding="utf-8") as csv_file:
         header_written = False
+        row_count = 0
         while True:
             raw = ser.readline()
             if not raw:
@@ -60,34 +62,39 @@ def record(port: str, baud: int, out_path: pathlib.Path) -> None:
 
             # Skip ESP-IDF log lines (start with I/W/E/D followed by ' (')
             if len(line) > 1 and line[0] in "IWED" and " (" in line[:20]:
+                print(f"[esp32] {line}")
                 continue
 
             # Skip blank lines
             if not line:
                 continue
 
-            # The first non-log line should be the CSV header
-            if not header_written and line.startswith("timestamp_epoch"):
-                csv_file.write(line + "\n")
+            # The first non-log line is treated as the CSV header
+            if not header_written:
+                header = f"{line},estado\n" if estado else f"{line}\n"
+                csv_file.write(header)
                 csv_file.flush()
-                print(line)
+                print(f"[header] {line}")
                 header_written = True
                 continue
 
             if header_written:
-                csv_file.write(line + "\n")
+                row = f"{line},{estado}\n" if estado else f"{line}\n"
+                csv_file.write(row)
                 csv_file.flush()
-                print(line)
+                row_count += 1
+                print(f"[row {row_count:>4}] {line}")
 
 
 def main() -> None:
     args = sys.argv[1:]
-    port = args[0] if len(args) >= 1 else detect_port()
-    baud = int(args[1]) if len(args) >= 2 else DEFAULT_BAUD
+    port = detect_port()
+    baud = DEFAULT_BAUD
+    estado = args[0] if len(args) >= 1 else None
     out_path = make_csv_path()
 
     try:
-        record(port, baud, out_path)
+        record(port, baud, out_path, estado)
     except KeyboardInterrupt:
         print(f"\nStopped. Data saved to {out_path}")
     except serial.SerialException as e:
