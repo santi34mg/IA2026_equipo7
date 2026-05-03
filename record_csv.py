@@ -2,6 +2,8 @@
 Reads sensor CSV rows from the ESP32 serial port and saves them to a
 timestamped file: data_plant_<YYYYMMDD_HHMMSS>.csv
 
+Each times it gets a row, it gets the current time to save it into it
+
 Usage:
     python record_csv.py            # auto-detects port, no estado column
     python record_csv.py estado      # auto-detects port, appends ,estado column with value "riego"
@@ -50,6 +52,8 @@ def record(port: str, baud: int, out_path: pathlib.Path, estado: str | None = No
     with serial.Serial(port, baud, timeout=2) as ser, open(out_path, "w", newline="", encoding="utf-8") as csv_file:
         header_written = False
         row_count = 0
+        t0 = None
+        uptime0 = None
         while True:
             raw = ser.readline()
             if not raw:
@@ -71,7 +75,7 @@ def record(port: str, baud: int, out_path: pathlib.Path, estado: str | None = No
 
             # The first non-log line is treated as the CSV header
             if not header_written:
-                header = f"{line},estado\n" if estado else f"{line}\n"
+                header = f"timestamp,{line},estado\n" if estado else f"timestamp,{line}\n"
                 csv_file.write(header)
                 csv_file.flush()
                 print(f"[header] {line}")
@@ -79,6 +83,20 @@ def record(port: str, baud: int, out_path: pathlib.Path, estado: str | None = No
                 continue
 
             if header_written:
+                # Reemplaza el uptime del ESP32 por un datetime real
+                parts = line.split(",")
+                try:
+                    uptime = float(parts[0])
+                    if t0 is None:
+                        t0 = datetime.datetime.now()
+                        uptime0 = uptime
+                    ts = t0 + datetime.timedelta(seconds=(uptime - uptime0))
+                    ts_str = ts.strftime("%Y-%m-%d %H:%M:%S")
+                    parts[0] = ts_str
+                    line = ",".join(parts)
+                except (ValueError, IndexError):
+                    pass
+
                 row = f"{line},{estado}\n" if estado else f"{line}\n"
                 csv_file.write(row)
                 csv_file.flush()

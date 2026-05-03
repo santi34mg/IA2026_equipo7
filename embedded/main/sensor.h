@@ -4,6 +4,9 @@
 
 #include "esp_err.h"
 
+// Se termino usando los valores de raw, teniendo en cuenta que se van a usar los mismos sensores
+// A lo largo de este proyecto
+
 struct SensorData {
     bool  dht11_ok;
     float dht11_temperature_c;
