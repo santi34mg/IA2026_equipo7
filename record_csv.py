@@ -50,7 +50,13 @@ def record(port: str, baud: int, out_path: pathlib.Path, estado: str | None = No
     print("Press Ctrl+C to stop.\n")
 
     with serial.Serial(port, baud, timeout=2) as ser, open(out_path, "w", newline="", encoding="utf-8") as csv_file:
-        header_written = False
+        # El ESP32 no manda header de texto, lo hardcodeamos
+        columns = "timestamp,dht_temp,dht_humedad,ks_temp,light,soil_humidity"
+        header = f"{columns},estado\n" if estado else f"{columns}\n"
+        csv_file.write(header)
+        csv_file.flush()
+        print(f"[header] {columns}")
+
         row_count = 0
         t0 = None
         uptime0 = None
@@ -73,35 +79,24 @@ def record(port: str, baud: int, out_path: pathlib.Path, estado: str | None = No
             if not line:
                 continue
 
-            # The first non-log line is treated as the CSV header
-            if not header_written:
-                header = f"timestamp,{line},estado\n" if estado else f"timestamp,{line}\n"
-                csv_file.write(header)
-                csv_file.flush()
-                print(f"[header] {line}")
-                header_written = True
-                continue
+            # Reemplaza el uptime del ESP32 por un datetime real
+            parts = line.split(",")
+            try:
+                uptime = float(parts[0])
+                if t0 is None:
+                    t0 = datetime.datetime.now()
+                    uptime0 = uptime
+                ts = t0 + datetime.timedelta(seconds=(uptime - uptime0))
+                parts[0] = ts.strftime("%Y-%m-%d %H:%M:%S")
+                line = ",".join(parts)
+            except (ValueError, IndexError):
+                pass
 
-            if header_written:
-                # Reemplaza el uptime del ESP32 por un datetime real
-                parts = line.split(",")
-                try:
-                    uptime = float(parts[0])
-                    if t0 is None:
-                        t0 = datetime.datetime.now()
-                        uptime0 = uptime
-                    ts = t0 + datetime.timedelta(seconds=(uptime - uptime0))
-                    ts_str = ts.strftime("%Y-%m-%d %H:%M:%S")
-                    parts[0] = ts_str
-                    line = ",".join(parts)
-                except (ValueError, IndexError):
-                    pass
-
-                row = f"{line},{estado}\n" if estado else f"{line}\n"
-                csv_file.write(row)
-                csv_file.flush()
-                row_count += 1
-                print(f"[row {row_count:>4}] {line}")
+            row = f"{line},{estado}\n" if estado else f"{line}\n"
+            csv_file.write(row)
+            csv_file.flush()
+            row_count += 1
+            print(f"[row {row_count:>4}] {line}")
 
 
 def main() -> None:

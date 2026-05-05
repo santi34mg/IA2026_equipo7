@@ -22,7 +22,7 @@ esp_err_t storage_csv::build_header(char *buffer, size_t buffer_len, size_t *wri
     const int len = snprintf(
         buffer,
         buffer_len,
-        "timestamp_epoch,dht11_temp_c,dht11_humidity_pct,ks0033_temp_c,moisture_raw,light_raw\n"
+        "timestamp_epoch,dht11_temp_c,dht11_humidity_pct,ks0033_temp_c,light_raw,moisture_raw\n"
     );
     if (len < 0 || static_cast<size_t>(len) >= buffer_len) {
         return ESP_ERR_INVALID_SIZE;
@@ -51,8 +51,8 @@ esp_err_t storage_csv::build_row(
         static_cast<double>(data.dht11_temperature_c),
         static_cast<double>(data.dht11_humidity_pct),
         static_cast<double>(data.ks0033_temperature_c),
-        data.moisture_raw,
-        data.light_raw
+        data.light_raw,
+        data.moisture_raw
     );
     if (len < 0 || static_cast<size_t>(len) >= buffer_len) {
         return ESP_ERR_INVALID_SIZE;
