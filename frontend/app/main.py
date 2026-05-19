@@ -1,0 +1,114 @@
+import os
+from pathlib import Path
+
+import uvicorn
+from fastapi import FastAPI, HTTPException, Response, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+from .firmware import firmware_status, validate_firmware
+from .models import (
+    FirmwareResponse,
+    PortsResponse,
+    SessionView,
+    StartRequest,
+    ValidatePathRequest,
+    ValidatePathResponse,
+)
+from .ports import _mock_ports, list_serial_ports, port_exists
+from .session import SessionManager
+from .ws_bus import WSBus
+
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+MOCK = os.environ.get("FRONTEND_MOCK", "").lower() in ("1", "true", "yes")
+
+
+def create_app() -> FastAPI:
+    app = FastAPI(title="ESP32 Plant Measurement")
+    app.state.sessions = SessionManager()
+    app.state.bus = WSBus()
+
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+    @app.get("/", include_in_schema=False)
+    async def index() -> FileResponse:
+        return FileResponse(str(STATIC_DIR / "index.html"))
+
+    @app.get("/api/ports", response_model=PortsResponse)
+    async def get_ports() -> PortsResponse:
+        ports = _mock_ports() if MOCK else list_serial_ports()
+        return PortsResponse(ports=ports)
+
+    @app.get("/api/firmware", response_model=FirmwareResponse)
+    async def get_firmware() -> FirmwareResponse:
+        if MOCK:
+            from .models import FirmwareFile
+            return FirmwareResponse(
+                ok=True,
+                missing=[],
+                files=[FirmwareFile(offset=o, name=n, size=0) for o, n in [(0x1000, "bootloader.bin"), (0x8000, "partition-table.bin"), (0x10000, "embedded.bin")]],
+            )
+        return firmware_status()
+
+    @app.post("/api/validate-path", response_model=ValidatePathResponse)
+    async def validate_path(req: ValidatePathRequest) -> ValidatePathResponse:
+        p = Path(req.path)
+        parent = p.parent
+        exists = p.exists()
+        parent_ok = parent.exists() and os.access(parent, os.W_OK)
+        if not parent.exists():
+            return ValidatePathResponse(ok=False, exists=exists, parent_writeable=False, reason="Parent directory does not exist.")
+        if not parent_ok:
+            return ValidatePathResponse(ok=False, exists=exists, parent_writeable=False, reason="Parent directory is not writeable.")
+        return ValidatePathResponse(ok=True, exists=exists, parent_writeable=True)
+
+    @app.post("/api/session", response_model=SessionView, status_code=201)
+    async def start_session(req: StartRequest) -> SessionView:
+        if not MOCK and not port_exists(req.port):
+            raise HTTPException(status_code=400, detail=f"Port not found: {req.port}")
+        if not MOCK:
+            try:
+                validate_firmware()
+            except FileNotFoundError as exc:
+                raise HTTPException(status_code=503, detail=str(exc))
+        session = await app.state.sessions.start(req, app.state.bus, mock=MOCK)
+        return session.to_view()
+
+    @app.get("/api/session")
+    async def get_session(response: Response) -> SessionView | None:
+        s = app.state.sessions.current()
+        if s is None:
+            response.status_code = 204
+            return None
+        return s.to_view()
+
+    @app.post("/api/session/stop", response_model=SessionView)
+    async def stop_session() -> SessionView:
+        s = await app.state.sessions.stop()
+        if s is None:
+            raise HTTPException(status_code=404, detail="No active session.")
+        return s.to_view()
+
+    @app.websocket("/ws/session")
+    async def ws_session(ws: WebSocket) -> None:
+        bus: WSBus = app.state.bus
+        await bus.connect(ws)
+        # Send current session state immediately on connect so fresh tabs sync up
+        s = app.state.sessions.current()
+        if s is not None:
+            await ws.send_json({"type": "state", "session_id": s.id, "data": {"state": s.state, "row_count": s.row_count}})
+        try:
+            while True:
+                await ws.receive_text()  # keep connection alive; client sends nothing
+        except WebSocketDisconnect:
+            pass
+        finally:
+            await bus.disconnect(ws)
+
+    return app
+
+
+app = create_app()
+
+if __name__ == "__main__":
+    uvicorn.run("frontend.app.main:app", host="127.0.0.1", port=8000, reload=False)
