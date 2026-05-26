@@ -20,31 +20,57 @@ Commit the binaries — they don't need to be rebuilt unless the firmware change
 
 ### 2. Install dependencies
 
+**Linux / macOS:**
 ```bash
 # From repo root:
 .venv/bin/pip install -r frontend/requirements.txt
 ```
 
-### 3. (Linux only) Allow serial port access
+**Windows (PowerShell):**
+```powershell
+# From repo root — create venv first if you don't have one:
+py -m venv .venv
+.venv\Scripts\pip.exe install -r frontend\requirements.txt
+```
 
+### 3. Allow serial port access
+
+**Linux:**
 ```bash
 sudo usermod -aG dialout $USER
 # then logout and log back in (or: newgrp dialout in the current shell)
 ```
 
+**Windows:**
+No group setup needed. Plug in the ESP32 and install the USB-serial driver if Windows doesn't pick it up automatically — most ESP32 boards use CP210x or CH340. Confirm the port shows up as `COM3`, `COM4`, etc. in Device Manager → *Ports (COM & LPT)*.
+
 ### 4. Run the server
 
+**Linux / macOS:**
 ```bash
 # From repo root:
 .venv/bin/python -m uvicorn frontend.app.main:app --host 127.0.0.1 --port 8000
+```
+
+**Windows (PowerShell):**
+```powershell
+# From repo root:
+.venv\Scripts\python.exe -m uvicorn frontend.app.main:app --host 127.0.0.1 --port 8000
 ```
 
 Open http://localhost:8000.
 
 ## Mock mode (no ESP32 needed)
 
+**Linux / macOS:**
 ```bash
 FRONTEND_MOCK=1 .venv/bin/python -m uvicorn frontend.app.main:app --host 127.0.0.1 --port 8000
+```
+
+**Windows (PowerShell):**
+```powershell
+$env:FRONTEND_MOCK = "1"
+.venv\Scripts\python.exe -m uvicorn frontend.app.main:app --host 127.0.0.1 --port 8000
 ```
 
 In mock mode:
