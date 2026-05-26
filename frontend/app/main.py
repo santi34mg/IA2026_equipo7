@@ -44,7 +44,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="ESP32 Plant Measurement")
     app.state.sessions = SessionManager()
     app.state.bus = WSBus()
-    app.state.analysis = AnalysisService()
+    app.state.analysis = AnalysisService(mock=MOCK)
 
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
