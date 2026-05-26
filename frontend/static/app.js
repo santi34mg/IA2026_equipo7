@@ -23,10 +23,12 @@ const firmwareMissing=document.getElementById("firmwareMissing");
 const flashSection  = document.getElementById("flashSection");
 const flashLog      = document.getElementById("flashLog");
 const recordSection = document.getElementById("recordSection");
-const rowCount      = document.getElementById("rowCount");
-const elapsed       = document.getElementById("elapsed");
-const lastRow       = document.getElementById("lastRow");
-const savedPath     = document.getElementById("savedPath");
+const rowCount        = document.getElementById("rowCount");
+const elapsed         = document.getElementById("elapsed");
+const lastRow         = document.getElementById("lastRow");
+const savedPath       = document.getElementById("savedPath");
+const predictionWrap  = document.getElementById("predictionWrap");
+const lastPrediction  = document.getElementById("lastPrediction");
 
 // ---------- State ----------
 // idle | starting | flashing | discovering | recording | stopping | done | error
@@ -178,6 +180,17 @@ function handleWSEvent(msg) {
     case "record_row":
       rowCount.textContent = data.count;
       lastRow.textContent = data.row;
+      // CSV column 6 (0-indexed) is 'predicted' in the new firmware format
+      // Format: timestamp,dht_temp,dht_hum,ks_temp,light,soil,predicted,estado
+      const rowCols = data.row.split(",");
+      if (rowCols.length >= 7) {
+        const pred = rowCols[6].trim();
+        if (pred === "Decaida" || pred === "Estable" || pred === "Ideal") {
+          lastPrediction.textContent = pred;
+          lastPrediction.className = "prediction-badge prediction-" + pred.toLowerCase();
+          predictionWrap.style.display = "";
+        }
+      }
       break;
     case "stopped":
       setState("done");

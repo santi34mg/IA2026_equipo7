@@ -1,6 +1,8 @@
 idf_component_register(
     SRCS
         "main.cpp"
+        "classifier.cpp"
+        "led_indicator.cpp"
         "sensor.cpp"
         "storage.cpp"
         "test_storage.cpp"

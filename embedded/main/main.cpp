@@ -9,7 +9,9 @@
 #include "freertos/task.h"
 #include "nvs_flash.h"
 
+#include "classifier.h"
 #include "discovery.h"
+#include "led_indicator.h"
 #include "sensor.h"
 #include "storage.h"
 #include "tcp_server.h"
@@ -41,8 +43,11 @@ void logger_task(void * /*arg*/) {
             ESP_LOGW(TAG, "Sensor read completed with one or more errors");
         }
 
+        const PlantState predicted = classifier::predict(sensor_data);
+        led_indicator::set_state(predicted);
+
         const int64_t timestamp_epoch = TimeService::current_epoch_seconds();
-        if (g_storage_manager.append_row(timestamp_epoch, sensor_data) != ESP_OK) {
+        if (g_storage_manager.append_row(timestamp_epoch, sensor_data, predicted) != ESP_OK) {
             ESP_LOGE(TAG, "Failed to append CSV row");
         }
 
@@ -136,6 +141,7 @@ extern "C" void app_main(void) {
     install_uart_console_driver();
 
     ESP_ERROR_CHECK(g_sensor_manager.init());
+    led_indicator::init();
 
     ret = g_storage_manager.init();
     if (ret != ESP_OK) {

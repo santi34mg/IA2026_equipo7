@@ -25,7 +25,9 @@ def parse_serial_line(raw: bytes, state: ParserState, estado: str | None) -> str
     Replaces the uptime seconds in column 0 with a real wall-clock
     timestamp anchored to the first data row received.
 
-    Appends ,<estado> when estado is not None.
+    The firmware appends a `predicted` column (Decaida/Estable/Ideal) to each
+    row; this function passes it through as-is. Appends ,<estado> when estado
+    is not None.
     """
     try:
         line = raw.decode("utf-8", errors="replace").rstrip("\r\n")

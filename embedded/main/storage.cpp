@@ -8,6 +8,7 @@
 #include "esp_log.h"
 #include "esp_spiffs.h"
 
+#include "classifier.h"
 #include "tcp_server.h"
 
 namespace {
@@ -24,7 +25,7 @@ esp_err_t storage_csv::build_header(char *buffer, size_t buffer_len, size_t *wri
     const int len = snprintf(
         buffer,
         buffer_len,
-        "timestamp_epoch,dht11_temp_c,dht11_humidity_pct,ks0033_temp_c,light_raw,moisture_raw\n"
+        "timestamp_epoch,dht11_temp_c,dht11_humidity_pct,ks0033_temp_c,light_raw,moisture_raw,predicted\n"
     );
     if (len < 0 || static_cast<size_t>(len) >= buffer_len) {
         return ESP_ERR_INVALID_SIZE;
@@ -39,7 +40,8 @@ esp_err_t storage_csv::build_row(
     size_t buffer_len,
     size_t *written_len,
     int64_t timestamp_epoch,
-    const SensorData &data
+    const SensorData &data,
+    PlantState predicted
 ) {
     if (buffer == nullptr || written_len == nullptr || buffer_len == 0) {
         return ESP_ERR_INVALID_ARG;
@@ -48,13 +50,14 @@ esp_err_t storage_csv::build_row(
     const int len = snprintf(
         buffer,
         buffer_len,
-        "%" PRId64 ",%.2f,%.2f,%.2f,%d,%d\n",
+        "%" PRId64 ",%.2f,%.2f,%.2f,%d,%d,%s\n",
         timestamp_epoch,
         static_cast<double>(data.dht11_temperature_c),
         static_cast<double>(data.dht11_humidity_pct),
         static_cast<double>(data.ks0033_temperature_c),
         data.light_raw,
-        data.moisture_raw
+        data.moisture_raw,
+        classifier::to_string(predicted)
     );
     if (len < 0 || static_cast<size_t>(len) >= buffer_len) {
         return ESP_ERR_INVALID_SIZE;
@@ -137,16 +140,16 @@ void StorageManager::dump_csv_to_serial() {
     fclose(file);
 }
 
-esp_err_t StorageManager::append_row(int64_t timestamp_epoch, const SensorData &data) {
+esp_err_t StorageManager::append_row(int64_t timestamp_epoch, const SensorData &data, PlantState predicted) {
     FILE *file = fopen(kCsvPath, "a");
     if (file == nullptr) {
         ESP_LOGE(TAG, "Failed opening %s for append", kCsvPath);
         return ESP_FAIL;
     }
 
-    char row[192] = {};
+    char row[208] = {};
     size_t row_len = 0;
-    esp_err_t fmt_ret = storage_csv::build_row(row, sizeof(row), &row_len, timestamp_epoch, data);
+    esp_err_t fmt_ret = storage_csv::build_row(row, sizeof(row), &row_len, timestamp_epoch, data, predicted);
     if (fmt_ret != ESP_OK) {
         fclose(file);
         ESP_LOGE(TAG, "Failed to format CSV row: %s", esp_err_to_name(fmt_ret));

@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from common.parser import ParserState, parse_serial_line
 
 BAUD = 115200
-CSV_HEADER = "timestamp,dht_temp,dht_humedad,ks_temp,light,soil_humidity,estado\n"
+CSV_HEADER = "timestamp,dht_temp,dht_humedad,ks_temp,light,soil_humidity,predicted,estado\n"
 TCP_CONNECT_TIMEOUT_S = 10.0
 
 

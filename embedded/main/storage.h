@@ -5,17 +5,20 @@
 
 #include "esp_err.h"
 
+#include "classifier.h"
 #include "sensor.h"
 
 namespace storage_csv {
 esp_err_t build_header(char *buffer, size_t buffer_len, size_t *written_len);
-esp_err_t build_row(char *buffer, size_t buffer_len, size_t *written_len, int64_t timestamp_epoch, const SensorData &data);
+esp_err_t build_row(char *buffer, size_t buffer_len, size_t *written_len,
+                    int64_t timestamp_epoch, const SensorData &data,
+                    PlantState predicted);
 }  // namespace storage_csv
 
 class StorageManager {
 public:
     esp_err_t init();
-    esp_err_t append_row(int64_t timestamp_epoch, const SensorData &data);
+    esp_err_t append_row(int64_t timestamp_epoch, const SensorData &data, PlantState predicted);
     void dump_csv_to_serial();
 
 private:
