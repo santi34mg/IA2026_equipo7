@@ -38,7 +38,9 @@ class ValidatePathResponse(BaseModel):
 
 
 class StartRequest(BaseModel):
-    port: str
+    source: Literal["usb", "wifi"] = "usb"
+    port: str | None = None  # required only when source == "usb"
+    ip: str | None = None    # WiFi only; if set, skip discovery and connect direct
     estado: str = Field(min_length=1, max_length=64)
     out_path: str
     overwrite: bool = False
@@ -46,8 +48,10 @@ class StartRequest(BaseModel):
 
 class SessionView(BaseModel):
     id: str
-    state: Literal["flashing", "recording", "stopping", "done", "error"]
-    port: str
+    state: Literal["flashing", "discovering", "recording", "stopping", "done", "error"]
+    source: Literal["usb", "wifi"]
+    port: str | None
+    discovered_ip: str | None
     estado: str
     out_path: str
     started_at: datetime

@@ -16,14 +16,17 @@ if TYPE_CHECKING:
 @dataclass
 class Session:
     id: str
-    state: Literal["flashing", "recording", "stopping", "done", "error"]
-    port: str
+    state: Literal["flashing", "discovering", "recording", "stopping", "done", "error"]
+    source: Literal["usb", "wifi"]
+    port: str | None
     estado: str
     out_path: Path
     started_at: datetime
     row_count: int = 0
     last_row: str | None = None
     error: str | None = None
+    discovered_ip: str | None = None
+    manual_ip: str | None = None  # set if user typed an IP to skip discovery
     cancel_event: asyncio.Event = field(default_factory=asyncio.Event)
     task: asyncio.Task | None = None
 
@@ -31,7 +34,9 @@ class Session:
         return SessionView(
             id=self.id,
             state=self.state,
+            source=self.source,
             port=self.port,
+            discovered_ip=self.discovered_ip,
             estado=self.estado,
             out_path=str(self.out_path),
             started_at=self.started_at,
@@ -41,7 +46,7 @@ class Session:
         )
 
 
-_ACTIVE_STATES = {"flashing", "recording", "stopping"}
+_ACTIVE_STATES = {"flashing", "discovering", "recording", "stopping"}
 
 
 class SessionManager:
@@ -57,6 +62,9 @@ class SessionManager:
             if self._current and self._current.state in _ACTIVE_STATES:
                 raise HTTPException(status_code=409, detail="A session is already in progress.")
 
+            if req.source == "usb" and not req.port:
+                raise HTTPException(status_code=400, detail="USB mode requires a serial port.")
+
             out = Path(req.out_path)
             if not out.parent.exists():
                 raise HTTPException(status_code=400, detail=f"Directory does not exist: {out.parent}")
@@ -65,13 +73,19 @@ class SessionManager:
             if out.exists() and not req.overwrite:
                 raise HTTPException(status_code=409, detail="File already exists. Set overwrite=true to replace it.")
 
+            initial_state: Literal["flashing", "discovering"] = "flashing" if req.source == "usb" else "discovering"
+
+            manual_ip = (req.ip or "").strip() or None
+
             session = Session(
                 id=uuid.uuid4().hex,
-                state="flashing",
+                state=initial_state,
+                source=req.source,
                 port=req.port,
                 estado=req.estado,
                 out_path=out,
                 started_at=datetime.now(),
+                manual_ip=manual_ip,
             )
             self._current = session
 
@@ -88,7 +102,15 @@ class SessionManager:
         return s
 
     async def _run(self, session: Session, bus: "WSBus", mock: bool) -> None:
-        import os
+        try:
+            if session.source == "usb":
+                await self._run_usb(session, bus, mock)
+            else:
+                await self._run_wifi(session, bus, mock)
+        except Exception as exc:
+            await self._fail(session, bus, str(exc))
+
+    async def _run_usb(self, session: Session, bus: "WSBus", mock: bool) -> None:
         from .firmware import validate_firmware
         from .flasher import flash_esp32, flash_esp32_mock
         from .recorder import record_to_csv, record_to_csv_mock
@@ -96,58 +118,123 @@ class SessionManager:
         flash_fn = flash_esp32_mock if mock else flash_esp32
         record_fn = record_to_csv_mock if mock else record_to_csv
 
-        try:
-            # -- Firmware pre-flight (skipped in mock mode) --
-            if mock:
-                layout = []
-            else:
-                try:
-                    layout = validate_firmware()
-                except FileNotFoundError as exc:
-                    await self._fail(session, bus, str(exc))
-                    return
-
-            # -- Flash --
-            await bus.broadcast({"type": "state", "session_id": session.id, "data": {"state": "flashing"}})
-
-            async def on_flash_line(line: str) -> None:
-                await bus.broadcast({"type": "flash_log", "session_id": session.id, "data": {"line": line}})
-
-            exit_code = await flash_fn(session.port, layout, on_flash_line, session.cancel_event)
-            await bus.broadcast({"type": "flash_done", "session_id": session.id, "data": {"exit_code": exit_code}})
-
-            if exit_code != 0 or session.cancel_event.is_set():
-                await self._fail(session, bus, f"esptool exited with code {exit_code}")
+        if mock:
+            layout = []
+        else:
+            try:
+                layout = validate_firmware()
+            except FileNotFoundError as exc:
+                await self._fail(session, bus, str(exc))
                 return
 
-            # -- Record --
-            session.state = "recording"
-            await bus.broadcast({"type": "state", "session_id": session.id, "data": {"state": "recording"}})
+        # -- Flash --
+        await bus.broadcast({"type": "state", "session_id": session.id, "data": {"state": "flashing"}})
 
-            async def on_row(row: str, count: int) -> None:
-                session.last_row = row
-                session.row_count = count
-                await bus.broadcast({
-                    "type": "record_row",
-                    "session_id": session.id,
-                    "data": {"row": row, "count": count},
-                })
+        async def on_flash_line(line: str) -> None:
+            await bus.broadcast({"type": "flash_log", "session_id": session.id, "data": {"line": line}})
 
-            await record_fn(
-                session.port, session.out_path, session.estado,
-                on_row, session.cancel_event,
-            )
+        exit_code = await flash_fn(session.port, layout, on_flash_line, session.cancel_event)
+        await bus.broadcast({"type": "flash_done", "session_id": session.id, "data": {"exit_code": exit_code}})
 
-            # -- Done --
-            session.state = "done"
+        if exit_code != 0 or session.cancel_event.is_set():
+            await self._fail(session, bus, f"esptool exited with code {exit_code}")
+            return
+
+        # -- Record --
+        session.state = "recording"
+        await bus.broadcast({"type": "state", "session_id": session.id, "data": {"state": "recording"}})
+
+        async def on_row(row: str, count: int) -> None:
+            session.last_row = row
+            session.row_count = count
             await bus.broadcast({
-                "type": "stopped",
+                "type": "record_row",
                 "session_id": session.id,
-                "data": {"out_path": str(session.out_path), "row_count": session.row_count},
+                "data": {"row": row, "count": count},
             })
 
-        except Exception as exc:
-            await self._fail(session, bus, str(exc))
+        await record_fn(
+            session.port, session.out_path, session.estado,
+            on_row, session.cancel_event,
+        )
+
+        session.state = "done"
+        await bus.broadcast({
+            "type": "stopped",
+            "session_id": session.id,
+            "data": {"out_path": str(session.out_path), "row_count": session.row_count},
+        })
+
+    async def _run_wifi(self, session: Session, bus: "WSBus", mock: bool) -> None:
+        from .discovery import Discovered, discover_esp32, discover_esp32_mock
+        from .recorder import record_to_csv_tcp, record_to_csv_tcp_mock
+
+        discover_fn = discover_esp32_mock if mock else discover_esp32
+        record_fn = record_to_csv_tcp_mock if mock else record_to_csv_tcp
+
+        if session.manual_ip:
+            # User typed an IP — skip discovery entirely. Belt-and-suspenders for
+            # networks where both UDP broadcast AND the TCP subnet sweep fail.
+            discovered = Discovered(ip=session.manual_ip, tcp_port=8080)
+            session.discovered_ip = discovered.ip
+            await bus.broadcast({
+                "type": "discovered",
+                "session_id": session.id,
+                "data": {"ip": discovered.ip, "tcp_port": discovered.tcp_port},
+            })
+        else:
+            # -- Discovery (two-phase: UDP broadcast → TCP subnet sweep) --
+            await bus.broadcast({"type": "state", "session_id": session.id, "data": {"state": "discovering"}})
+
+            try:
+                discovered = await discover_fn(cancel_event=session.cancel_event)
+            except TimeoutError:
+                await self._fail(session, bus, "Could not find ESP32 on the LAN. Is it powered and connected to WiFi? You can also type the IP manually in the WiFi card.")
+                return
+            except asyncio.CancelledError:
+                session.state = "done"
+                await bus.broadcast({"type": "stopped", "session_id": session.id, "data": {"out_path": str(session.out_path), "row_count": 0}})
+                return
+            except OSError as exc:
+                await self._fail(session, bus, f"Discovery socket error: {exc}")
+                return
+
+            if session.cancel_event.is_set():
+                session.state = "done"
+                await bus.broadcast({"type": "stopped", "session_id": session.id, "data": {"out_path": str(session.out_path), "row_count": 0}})
+                return
+
+            session.discovered_ip = discovered.ip
+            await bus.broadcast({
+                "type": "discovered",
+                "session_id": session.id,
+                "data": {"ip": discovered.ip, "tcp_port": discovered.tcp_port},
+            })
+
+        # -- Record --
+        session.state = "recording"
+        await bus.broadcast({"type": "state", "session_id": session.id, "data": {"state": "recording"}})
+
+        async def on_row(row: str, count: int) -> None:
+            session.last_row = row
+            session.row_count = count
+            await bus.broadcast({
+                "type": "record_row",
+                "session_id": session.id,
+                "data": {"row": row, "count": count},
+            })
+
+        await record_fn(
+            discovered.ip, discovered.tcp_port, session.out_path, session.estado,
+            on_row, session.cancel_event,
+        )
+
+        session.state = "done"
+        await bus.broadcast({
+            "type": "stopped",
+            "session_id": session.id,
+            "data": {"out_path": str(session.out_path), "row_count": session.row_count},
+        })
 
     async def _fail(self, session: Session, bus: "WSBus", reason: str) -> None:
         session.state = "error"

@@ -85,12 +85,33 @@ h2 { font-size: 1rem; font-weight: 600; margin-bottom: .75rem; color: #444; }
   text-transform: uppercase;
   letter-spacing: .04em;
 }
-.badge-idle     { background: #e9ecef; color: #555; }
-.badge-flashing { background: #ffd60a; color: #333; }
-.badge-recording{ background: #06d6a0; color: #fff; }
-.badge-stopping { background: #fb8500; color: #fff; }
-.badge-done     { background: #4361ee; color: #fff; }
-.badge-error    { background: #e63946; color: #fff; }
+.badge-idle        { background: #e9ecef; color: #555; }
+.badge-starting    { background: #ffd60a; color: #333; }
+.badge-flashing    { background: #ffd60a; color: #333; }
+.badge-discovering { background: #8338ec; color: #fff; }
+.badge-recording   { background: #06d6a0; color: #fff; }
+.badge-stopping    { background: #fb8500; color: #fff; }
+.badge-done        { background: #4361ee; color: #fff; }
+.badge-error       { background: #e63946; color: #fff; }
+
+.source-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .5rem .9rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  flex: 1;
+  min-width: 180px;
+}
+.source-toggle:has(input:checked) {
+  border-color: #4361ee;
+  background: #eef2ff;
+}
+.source-toggle input { accent-color: #4361ee; }
+.source-toggle small { color: #777; font-weight: normal; }
 
 /* Banners */
 .banner {
@@ -98,7 +119,8 @@ h2 { font-size: 1rem; font-weight: 600; margin-bottom: .75rem; color: #444; }
   border-radius: 8px;
   font-size: .9rem;
 }
-.banner-error { background: #ffe5e7; border: 1px solid #e63946; color: #7d0018; }
+.banner-error   { background: #ffe5e7; border: 1px solid #e63946; color: #7d0018; }
+.banner-warning { background: #fff4d6; border: 1px solid #c77700; color: #6b3f00; }
 
 /* Hint text */
 .hint { font-size: .82rem; color: #666; margin-bottom: .6rem; }

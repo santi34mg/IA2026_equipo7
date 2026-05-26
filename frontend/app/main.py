@@ -1,4 +1,6 @@
 import os
+import platform
+from datetime import datetime
 from pathlib import Path
 
 import uvicorn
@@ -20,7 +22,21 @@ from .session import SessionManager
 from .ws_bus import WSBus
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+LINUX_DATA_DIR = Path("/tmp/proyectoIA")
 MOCK = os.environ.get("FRONTEND_MOCK", "").lower() in ("1", "true", "yes")
+
+
+def _suggested_directory() -> Path:
+    """Where Suggest should drop new recordings, by OS."""
+    if platform.system() == "Windows":
+        return PROJECT_ROOT
+    # Linux / Mac: /tmp/proyectoIA — create on demand
+    try:
+        LINUX_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return PROJECT_ROOT  # fallback if /tmp is unwriteable
+    return LINUX_DATA_DIR
 
 
 def create_app() -> FastAPI:
@@ -50,6 +66,16 @@ def create_app() -> FastAPI:
             )
         return firmware_status()
 
+    @app.get("/api/suggest-path")
+    async def suggest_path(source: str = "usb", estado: str = "noestado") -> dict:
+        # Sanitise estado so it can't break out of the filename
+        safe_estado = "".join(c for c in estado if c.isalnum() or c in "-_") or "noestado"
+        safe_source = source if source in ("usb", "wifi") else "usb"
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"data_plant_{safe_source}_{ts}_{safe_estado}.csv"
+        directory = _suggested_directory()
+        return {"path": str(directory / filename)}
+
     @app.post("/api/validate-path", response_model=ValidatePathResponse)
     async def validate_path(req: ValidatePathRequest) -> ValidatePathResponse:
         p = Path(req.path)
@@ -64,13 +90,17 @@ def create_app() -> FastAPI:
 
     @app.post("/api/session", response_model=SessionView, status_code=201)
     async def start_session(req: StartRequest) -> SessionView:
-        if not MOCK and not port_exists(req.port):
-            raise HTTPException(status_code=400, detail=f"Port not found: {req.port}")
-        if not MOCK:
-            try:
-                validate_firmware()
-            except FileNotFoundError as exc:
-                raise HTTPException(status_code=503, detail=str(exc))
+        # Port + firmware checks only apply to USB mode (WiFi skips the flash step entirely).
+        if req.source == "usb":
+            if not req.port:
+                raise HTTPException(status_code=400, detail="USB mode requires a serial port.")
+            if not MOCK and not port_exists(req.port):
+                raise HTTPException(status_code=400, detail=f"Port not found: {req.port}")
+            if not MOCK:
+                try:
+                    validate_firmware()
+                except FileNotFoundError as exc:
+                    raise HTTPException(status_code=503, detail=str(exc))
         session = await app.state.sessions.start(req, app.state.bus, mock=MOCK)
         return session.to_view()
 

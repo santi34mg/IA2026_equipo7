@@ -19,7 +19,21 @@
     </div>
 
     <section class="card">
-      <h2>1. Serial Port</h2>
+      <h2>1. Source</h2>
+      <div class="row">
+        <label class="source-toggle">
+          <input type="radio" name="source" value="usb" checked>
+          <span>USB <small>(flash + record from serial)</small></span>
+        </label>
+        <label class="source-toggle">
+          <input type="radio" name="source" value="wifi">
+          <span>WiFi <small>(auto-discover + record over TCP)</small></span>
+        </label>
+      </div>
+    </section>
+
+    <section class="card" id="portCard">
+      <h2>2. Serial Port</h2>
       <div class="row">
         <select id="portSelect" class="input-wide">
           <option value="">— scanning… —</option>
@@ -28,8 +42,30 @@
       </div>
     </section>
 
+    <section class="card" id="wifiInfoCard" style="display:none">
+      <h2>2. WiFi</h2>
+      <div class="banner banner-warning">
+        The frontend tries to <strong>auto-discover</strong> the ESP32 on your LAN, but
+        <strong>this does not work on every router</strong> — some block the UDP broadcast or isolate
+        WiFi clients from each other, and discovery will time out.
+        <br><br>
+        If that happens, just type the ESP32's IP address into the field below.
+      </div>
+      <p class="hint">
+        The ESP32 must already be powered, flashed (v2+), and connected to a network it knows about
+        (NVS credentials set via <code>configure_wifi.py</code>, or one of the hardcoded fallback networks).
+      </p>
+      <div class="row">
+        <input id="manualIp" type="text" class="input-wide" placeholder="Manual IP (optional) — e.g. 192.168.1.7">
+      </div>
+      <p class="hint">
+        Leave empty to auto-discover. Fill in to skip discovery entirely.
+      </p>
+      <p id="discoveryStatus" class="path-status"></p>
+    </section>
+
     <section class="card">
-      <h2>2. Plant State</h2>
+      <h2>3. Plant State</h2>
       <div class="row">
         <select id="estadoSelect" class="input-wide">
           <option value="Decaida">Decaida</option>
@@ -42,8 +78,8 @@
     </section>
 
     <section class="card">
-      <h2>3. Output CSV Path</h2>
-      <p class="hint">Type an absolute path for the CSV file. Example: <code>/home/user/recordings/run1.csv</code></p>
+      <h2>4. Output CSV Path</h2>
+      <p class="hint">Type an absolute path for the CSV file, or use <strong>Suggest</strong> for a name based on source + estado + timestamp. The file is saved to exactly the path shown.</p>
       <div class="row">
         <input id="outPath" type="text" class="input-wide" placeholder="/absolute/path/to/output.csv">
         <button id="suggestPath" class="btn btn-secondary">Suggest</button>

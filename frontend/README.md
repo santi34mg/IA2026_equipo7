@@ -80,6 +80,12 @@ In mock mode:
 
 Useful for UI development and testing on a laptop without hardware.
 
+## WiFi mode and auto-discovery
+
+In WiFi mode the frontend tries to auto-discover the ESP32 on your LAN. **This does not work on every router** — some block the UDP broadcast or isolate WiFi clients from each other, and discovery will time out.
+
+If that happens, just type the ESP32's IP address into the WiFi card manually.
+
 ## Architecture
 
 ```
