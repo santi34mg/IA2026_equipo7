@@ -32,12 +32,43 @@ EDA_PLOTS: dict[str, str] = {
 }
 
 
+MOCK_METRICS = {
+    "models": {
+        "decision_tree": {
+            "accuracy": 0.9612, "macro_f1": 0.9608,
+            "f1_per_class": {"Decaida": 0.9431, "Estable": 0.9714, "Ideal": 0.9679},
+            "cv_macro_f1_mean": 0.9521, "cv_macro_f1_std": 0.0183,
+            "roc_auc": 0.9874, "exported_kb": 8.32, "is_selected": False,
+        },
+        "random_forest": {
+            "accuracy": 0.9847, "macro_f1": 0.9845,
+            "f1_per_class": {"Decaida": 0.9762, "Estable": 0.9891, "Ideal": 0.9882},
+            "cv_macro_f1_mean": 0.9803, "cv_macro_f1_std": 0.0094,
+            "roc_auc": 0.9971, "exported_kb": 312.74, "is_selected": True,
+        },
+        "knn": {
+            "accuracy": 0.9531, "macro_f1": 0.9524,
+            "f1_per_class": {"Decaida": 0.9318, "Estable": 0.9612, "Ideal": 0.9642},
+            "cv_macro_f1_mean": 0.9441, "cv_macro_f1_std": 0.0221,
+            "roc_auc": 0.9812, "exported_kb": None, "is_selected": False,
+        },
+        "svm": {
+            "accuracy": 0.9703, "macro_f1": 0.9699,
+            "f1_per_class": {"Decaida": 0.9587, "Estable": 0.9743, "Ideal": 0.9767},
+            "cv_macro_f1_mean": 0.9654, "cv_macro_f1_std": 0.0141,
+            "roc_auc": 0.9932, "exported_kb": None, "is_selected": False,
+        },
+    }
+}
+
+
 class AnalysisService:
-    def __init__(self) -> None:
+    def __init__(self, mock: bool = False) -> None:
         self._df: Optional[pd.DataFrame] = None
         self._pipelines: dict = {}
         self._metrics: dict = {}
         self._available = False
+        self._mock = mock
         self._plot_lock = asyncio.Lock()
         self._load()
 
@@ -47,30 +78,33 @@ class AnalysisService:
         except Exception as exc:
             logger.warning("AnalysisService: could not load CSVs: %s", exc)
 
-        if not MODELS_DIR.exists():
-            logger.warning("AnalysisService: eda/models/ not found — run modelo.ipynb first")
-            return
-
-        try:
-            import joblib
-        except ImportError:
-            logger.warning("AnalysisService: joblib not installed")
-            return
-
-        for jl in sorted(MODELS_DIR.glob("*.joblib")):
+        if MODELS_DIR.exists():
             try:
-                self._pipelines[jl.stem] = joblib.load(jl)
-            except Exception as exc:
-                logger.warning("AnalysisService: could not load %s: %s", jl.name, exc)
+                import joblib
+            except ImportError:
+                logger.warning("AnalysisService: joblib not installed")
+            else:
+                for jl in sorted(MODELS_DIR.glob("*.joblib")):
+                    try:
+                        self._pipelines[jl.stem] = joblib.load(jl)
+                    except Exception as exc:
+                        logger.warning("AnalysisService: could not load %s: %s", jl.name, exc)
 
-        metrics_path = MODELS_DIR / "metrics.json"
-        if metrics_path.exists():
-            with open(metrics_path) as f:
-                self._metrics = json.load(f)
+                metrics_path = MODELS_DIR / "metrics.json"
+                if metrics_path.exists():
+                    with open(metrics_path) as f:
+                        self._metrics = json.load(f)
 
-        if self._pipelines:
+                if self._pipelines:
+                    self._available = True
+                    logger.info("AnalysisService loaded %d models", len(self._pipelines))
+        else:
+            logger.warning("AnalysisService: eda/models/ not found — run modelo.ipynb first")
+
+        if not self._available and self._mock:
+            self._metrics = MOCK_METRICS
             self._available = True
-            logger.info("AnalysisService loaded %d models", len(self._pipelines))
+            logger.info("AnalysisService: mock mode — using synthetic metrics and predictions")
 
     @property
     def available(self) -> bool:
@@ -87,17 +121,42 @@ class AnalysisService:
 
     def predict_all(self, features: list) -> dict:
         """Predict with all loaded pipelines. features = [temperatura, luz, humedad_suelo]."""
-        if not self._pipelines:
-            return {}
-        X = np.array([features], dtype=np.float32)
-        out = {}
-        for name, pipe in self._pipelines.items():
-            try:
-                idx = int(pipe.predict(X)[0])
-                out[name] = LABEL_NAMES[idx] if 0 <= idx < len(LABEL_NAMES) else str(idx)
-            except Exception:
-                pass
-        return out
+        if self._pipelines:
+            X = np.array([features], dtype=np.float32)
+            out = {}
+            for name, pipe in self._pipelines.items():
+                try:
+                    idx = int(pipe.predict(X)[0])
+                    out[name] = LABEL_NAMES[idx] if 0 <= idx < len(LABEL_NAMES) else str(idx)
+                except Exception:
+                    pass
+            return out
+
+        if self._mock and self._available:
+            return self._mock_predict(features)
+
+        return {}
+
+    def _mock_predict(self, features: list) -> dict:
+        """Rule-based mock predictions that vary slightly per model."""
+        temp, light, moisture = (features + [0, 0, 0])[:3]
+        # Base label from simple thresholds
+        if moisture > 1400 and temp > 12:
+            base = "Ideal"
+        elif moisture > 700 or temp > 8:
+            base = "Estable"
+        else:
+            base = "Decaida"
+
+        # Each mock model agrees most of the time but has characteristic disagreements
+        labels = LABEL_NAMES
+        idx = labels.index(base)
+        return {
+            "decision_tree": labels[max(0, idx - (1 if light < 300 else 0))],
+            "random_forest": base,
+            "knn":           labels[min(2, idx + (1 if moisture > 2000 else 0))],
+            "svm":           base,
+        }
 
     async def render_plot_async(self, name: str) -> bytes:
         if name not in EDA_PLOTS:

@@ -210,16 +210,20 @@ async def record_to_csv_mock(
                 for i in range(60)
             ]
 
-        for raw in lines:
-            if cancel_event.is_set():
-                break
-            await asyncio.sleep(0.25)
-            row = parse_serial_line(raw, parser_state, estado)
-            if row is None:
-                continue
-            csv_file.write(row + "\n")
-            csv_file.flush()
-            row_count += 1
-            await on_row(row, row_count)
+        # Loop indefinitely so the mock session stays alive until the user stops it
+        cycle = 0
+        while not cancel_event.is_set():
+            for raw in lines:
+                if cancel_event.is_set():
+                    break
+                await asyncio.sleep(0.25)
+                row = parse_serial_line(raw, parser_state, estado)
+                if row is None:
+                    continue
+                csv_file.write(row + "\n")
+                csv_file.flush()
+                row_count += 1
+                await on_row(row, row_count)
+            cycle += 1
 
     return row_count
