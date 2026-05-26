@@ -20,6 +20,7 @@ except ImportError:
     print("pyserial not found. Install it with:  pip install pyserial")
     sys.exit(1)
 
+from common.parser import ParserState, parse_serial_line
 
 DEFAULT_BAUD = 115200
 
@@ -58,45 +59,27 @@ def record(port: str, baud: int, out_path: pathlib.Path, estado: str | None = No
         print(f"[header] {columns}")
 
         row_count = 0
-        t0 = None
-        uptime0 = None
+        state = ParserState()
         while True:
             raw = ser.readline()
             if not raw:
                 continue
 
-            try:
-                line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
-            except Exception:
+            row = parse_serial_line(raw, state, estado)
+            if row is None:
+                # Log ESP-IDF lines to console so operator can see them
+                try:
+                    line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+                    if line and line[0] in "IWED" and " (" in line[:20]:
+                        print(f"[esp32] {line}")
+                except Exception:
+                    pass
                 continue
 
-            # Skip ESP-IDF log lines (start with I/W/E/D followed by ' (')
-            if len(line) > 1 and line[0] in "IWED" and " (" in line[:20]:
-                print(f"[esp32] {line}")
-                continue
-
-            # Skip blank lines
-            if not line:
-                continue
-
-            # Reemplaza el uptime del ESP32 por un datetime real
-            parts = line.split(",")
-            try:
-                uptime = float(parts[0])
-                if t0 is None:
-                    t0 = datetime.datetime.now()
-                    uptime0 = uptime
-                ts = t0 + datetime.timedelta(seconds=(uptime - uptime0))
-                parts[0] = ts.strftime("%Y-%m-%d %H:%M:%S")
-                line = ",".join(parts)
-            except (ValueError, IndexError):
-                pass
-
-            row = f"{line},{estado}\n" if estado else f"{line}\n"
-            csv_file.write(row)
+            csv_file.write(row + "\n")
             csv_file.flush()
             row_count += 1
-            print(f"[row {row_count:>4}] {line}")
+            print(f"[row {row_count:>4}] {row}")
 
 
 def main() -> None:

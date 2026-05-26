@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32 Plant Measurement</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <span class="brand-leaf" aria-hidden="true">🌿</span>
+      <h1>ESP32 Plant Measurement</h1>
+      <span id="statusBadge" class="badge badge-idle">Idle</span>
+      <a href="/analysis" class="btn btn-secondary" style="text-decoration:none; margin-left:auto;">Análisis</a>
+    </header>
+
+    <div id="firmwareBanner" class="banner banner-error" style="display:none">
+      <strong>Firmware missing.</strong> Populate <code>firmware/</code> with pre-built binaries — see <code>firmware/README.md</code>.
+      <span id="firmwareMissing"></span>
+    </div>
+
+    <section class="card">
+      <h2>1. Source</h2>
+      <div class="row">
+        <label class="source-toggle">
+          <input type="radio" name="source" value="usb" checked>
+          <span>USB <small>(flash + record from serial)</small></span>
+        </label>
+        <label class="source-toggle">
+          <input type="radio" name="source" value="wifi">
+          <span>WiFi <small>(auto-discover + record over TCP)</small></span>
+        </label>
+      </div>
+    </section>
+
+    <section class="card" id="portCard">
+      <h2>2. Serial Port</h2>
+      <div class="row">
+        <select id="portSelect" class="input-wide">
+          <option value="">— scanning… —</option>
+        </select>
+        <button id="refreshPorts" class="btn btn-secondary">Refresh</button>
+      </div>
+    </section>
+
+    <section class="card" id="wifiInfoCard" style="display:none">
+      <h2>2. WiFi</h2>
+      <div class="banner banner-warning">
+        The frontend tries to <strong>auto-discover</strong> the ESP32 on your LAN, but
+        <strong>this does not work on every router</strong> — some block the UDP broadcast or isolate
+        WiFi clients from each other, and discovery will time out.
+        <br><br>
+        If that happens, just type the ESP32's IP address into the field below.
+      </div>
+      <p class="hint">
+        The ESP32 must already be powered, flashed (v2+), and connected to a network it knows about
+        (NVS credentials set via <code>configure_wifi.py</code>, or one of the hardcoded fallback networks).
+      </p>
+      <div class="row">
+        <input id="manualIp" type="text" class="input-wide" placeholder="Manual IP (optional) — e.g. 192.168.1.7">
+      </div>
+      <p class="hint">
+        Leave empty to auto-discover. Fill in to skip discovery entirely.
+      </p>
+      <p id="discoveryStatus" class="path-status"></p>
+    </section>
+
+    <section class="card">
+      <h2>3. Plant State</h2>
+      <div class="row">
+        <select id="estadoSelect" class="input-wide">
+          <option value="Decaida">Decaida</option>
+          <option value="Estable" selected>Estable</option>
+          <option value="Ideal">Ideal</option>
+          <option value="__other__">Other…</option>
+        </select>
+        <input id="estadoCustom" type="text" class="input-wide" placeholder="Custom state label" style="display:none">
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>4. Output CSV Path</h2>
+      <p class="hint">Type an absolute path for the CSV file, or use <strong>Suggest</strong> for a name based on source + estado + timestamp. The file is saved to exactly the path shown.</p>
+      <div class="row">
+        <input id="outPath" type="text" class="input-wide" placeholder="/absolute/path/to/output.csv">
+        <button id="suggestPath" class="btn btn-secondary">Suggest</button>
+        <button id="validatePath" class="btn btn-secondary">Validate</button>
+      </div>
+      <p id="pathStatus" class="path-status"></p>
+      <p class="hint warn" id="overwriteWarn" style="display:none">
+        File already exists. Click <strong>Run measurement</strong> again to overwrite.
+      </p>
+    </section>
+
+    <section class="card actions-card">
+      <button id="runBtn" class="btn btn-primary" disabled>Run measurement</button>
+      <button id="stopBtn" class="btn btn-danger" disabled>Stop</button>
+    </section>
+
+    <section class="card" id="flashSection" style="display:none">
+      <h2>Flash log</h2>
+      <pre id="flashLog" class="log-box"></pre>
+    </section>
+
+    <section class="card" id="recordSection" style="display:none">
+      <h2>Live data</h2>
+      <div class="stats-row">
+        <span>Rows: <strong id="rowCount">0</strong></span>
+        <span id="elapsedWrap">Elapsed: <strong id="elapsed">0s</strong></span>
+        <span id="predictionWrap" style="display:none">
+          Predicción: <strong id="lastPrediction" class="prediction-badge">—</strong>
+        </span>
+      </div>
+      <pre id="lastRow" class="last-row"></pre>
+      <p id="savedPath" class="saved-path" style="display:none"></p>
+    </section>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

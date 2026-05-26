@@ -1,10 +1,15 @@
 idf_component_register(
     SRCS
         "main.cpp"
+        "classifier.cpp"
+        "led_indicator.cpp"
         "sensor.cpp"
         "storage.cpp"
         "test_storage.cpp"
         "time_service.cpp"
+        "wifi_manager.cpp"
+        "tcp_server.cpp"
+        "discovery.cpp"
     INCLUDE_DIRS "."
     REQUIRES
         esp_driver_gpio
@@ -14,4 +19,10 @@ idf_component_register(
         spiffs
         nvs_flash
         unity
+        esp_wifi
+        esp_netif
+        esp_event
+        esp_driver_uart
+        vfs
+        lwip
 )
