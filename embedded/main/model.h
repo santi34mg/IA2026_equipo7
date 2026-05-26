@@ -9,58 +9,40 @@ namespace Eloquent {
                     * Predict class for features vector
                     */
                     int predict(float *x) {
-                        if (x[0] <= -0.329419270157814) {
-                            if (x[2] <= -0.24989820271730423) {
-                                if (x[1] <= 0.020659327507019043) {
-                                    return 1;
-                                }
+                        float votes[3] = { -3.245982047515 ,2.317373834706 ,0.928608212809  };
+                        votes[0] += dot(x,   -6.745191085231  , -0.443679958647  , 1.885075865647 );
+                        votes[1] += dot(x,   1.479783888137  , 1.798345252488  , -0.600030451919 );
+                        votes[2] += dot(x,   5.265407197095  , -1.354665293841  , -1.285045413729 );
+                        // return argmax of votes
+                        uint8_t classIdx = 0;
+                        float maxVotes = votes[0];
 
-                                else {
-                                    return 0;
-                                }
-                            }
-
-                            else {
-                                if (x[2] <= 0.1588461548089981) {
-                                    return 0;
-                                }
-
-                                else {
-                                    return 0;
-                                }
+                        for (uint8_t i = 1; i < 3; i++) {
+                            if (votes[i] > maxVotes) {
+                                classIdx = i;
+                                maxVotes = votes[i];
                             }
                         }
 
-                        else {
-                            if (x[1] <= 0.5869736969470978) {
-                                if (x[2] <= 0.867463730275631) {
-                                    return 2;
-                                }
-
-                                else {
-                                    if (x[2] <= 1.5525243878364563) {
-                                        return 1;
-                                    }
-
-                                    else {
-                                        return 1;
-                                    }
-                                }
-                            }
-
-                            else {
-                                if (x[2] <= -1.1011306643486023) {
-                                    return 2;
-                                }
-
-                                else {
-                                    return 1;
-                                }
-                            }
-                        }
+                        return classIdx;
                     }
 
                 protected:
+                    /**
+                    * Compute dot product
+                    */
+                    float dot(float *x, ...) {
+                        va_list w;
+                        va_start(w, 3);
+                        float dot = 0.0;
+
+                        for (uint16_t i = 0; i < 3; i++) {
+                            const float wi = va_arg(w, double);
+                            dot += x[i] * wi;
+                        }
+
+                        return dot;
+                    }
                 };
             }
         }

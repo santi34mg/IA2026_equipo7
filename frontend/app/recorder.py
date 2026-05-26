@@ -151,6 +151,11 @@ async def record_to_csv_tcp(
                     except Exception:
                         pass
                     continue
+                # Drop the on-board `predicted` column so the WiFi CSV matches
+                # the USB/serial format (7 fields, ending in estado).
+                parts = row.split(",")
+                if len(parts) == 8:
+                    row = ",".join(parts[:6] + parts[7:])
                 loop.call_soon_threadsafe(row_queue.put_nowait, row)
         except BaseException as exc:
             loop.call_soon_threadsafe(error_queue.put_nowait, exc)
