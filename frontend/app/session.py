@@ -149,12 +149,18 @@ class SessionManager:
         async def on_row(row: str, count: int) -> None:
             session.last_row = row
             session.row_count = count
+            primary, preds = _compute_predictions(session, row)
             await bus.broadcast({
                 "type": "record_row",
                 "session_id": session.id,
-                "data": {"row": row, "count": count},
+                "data": {"row": row, "count": count, "predicted": primary},
             })
-            _maybe_broadcast_multi_predict(session, bus, row)
+            if preds:
+                asyncio.ensure_future(bus.broadcast({
+                    "type": "multi_predict",
+                    "session_id": session.id,
+                    "data": preds,
+                }))
 
         await record_fn(
             session.port, session.out_path, session.estado,
@@ -221,12 +227,18 @@ class SessionManager:
         async def on_row(row: str, count: int) -> None:
             session.last_row = row
             session.row_count = count
+            primary, preds = _compute_predictions(session, row)
             await bus.broadcast({
                 "type": "record_row",
                 "session_id": session.id,
-                "data": {"row": row, "count": count},
+                "data": {"row": row, "count": count, "predicted": primary},
             })
-            _maybe_broadcast_multi_predict(session, bus, row)
+            if preds:
+                asyncio.ensure_future(bus.broadcast({
+                    "type": "multi_predict",
+                    "session_id": session.id,
+                    "data": preds,
+                }))
 
         await record_fn(
             discovered.ip, discovered.tcp_port, session.out_path, session.estado,
@@ -251,30 +263,26 @@ def _is_writeable(path: Path) -> bool:
     return os.access(path, os.W_OK)
 
 
-def _maybe_broadcast_multi_predict(session: "Session", bus: "WSBus", row: str) -> None:
-    """Fire-and-forget multi-model prediction broadcast.
+_PRIMARY_MODEL = "LogisticRegression"
 
-    Row format: timestamp,dht_temp,dht_hum,ks_temp,light,soil,predicted,estado
+
+def _compute_predictions(session: "Session", row: str) -> tuple[str | None, dict]:
+    """Run all loaded models on the row and return (LogisticRegression, all_preds).
+
+    Row format: timestamp,dht_temp,dht_hum,ks_temp,light,soil,estado
     Features: [dht_temp(col1), light(col4), soil(col5)]
     """
     if session.analysis is None or not session.analysis.available:
-        return
+        return None, {}
     try:
         parts = row.split(",")
         if len(parts) < 6:
-            return
+            return None, {}
         temp     = float(parts[1])
         light    = float(parts[4])
         moisture = float(parts[5])
     except (ValueError, IndexError):
-        return
+        return None, {}
 
-    preds = session.analysis.predict_all([temp, light, moisture])
-    if not preds:
-        return
-
-    asyncio.ensure_future(bus.broadcast({
-        "type": "multi_predict",
-        "session_id": session.id,
-        "data": preds,
-    }))
+    preds = session.analysis.predict_all([temp, light, moisture]) or {}
+    return preds.get(_PRIMARY_MODEL), preds

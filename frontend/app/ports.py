@@ -25,5 +25,9 @@ def port_exists(device: str) -> bool:
     return any(p.device == device for p in serial.tools.list_ports.comports())
 
 
+def is_rfc2217_port(device: str) -> bool:
+    return bool(device) and device.startswith("rfc2217://")
+
+
 def _mock_ports() -> list[PortInfo]:
     return [PortInfo(device="MOCK", description="Mock ESP32 (FRONTEND_MOCK=1)", hwid="USB\\VID_1A86&PID_7523")]

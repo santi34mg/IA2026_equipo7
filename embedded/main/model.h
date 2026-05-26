@@ -33,7 +33,7 @@ namespace Eloquent {
                     */
                     float dot(float *x, ...) {
                         va_list w;
-                        va_start(w, 3);
+                        va_start(w, x);
                         float dot = 0.0;
 
                         for (uint16_t i = 0; i < 3; i++) {

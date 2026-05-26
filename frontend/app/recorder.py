@@ -2,6 +2,7 @@ import asyncio
 import os
 import socket
 import sys
+import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
@@ -12,6 +13,23 @@ from common.parser import ParserState, parse_serial_line
 BAUD = 115200
 CSV_HEADER = "timestamp,dht_temp,dht_humedad,ks_temp,light,soil_humidity,predicted,estado\n"
 TCP_CONNECT_TIMEOUT_S = 10.0
+
+
+def _enable_keepalive(sock: socket.socket) -> None:
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+    except OSError:
+        pass
+
+
+def _sleep_interruptible(cancel_event: asyncio.Event, total_s: float, step_s: float = 0.1) -> bool:
+    """Sleep up to total_s, polling cancel_event. Returns True if cancelled."""
+    end = time.monotonic() + total_s
+    while time.monotonic() < end:
+        if cancel_event.is_set():
+            return True
+        time.sleep(min(step_s, max(0.0, end - time.monotonic())))
+    return cancel_event.is_set()
 
 
 async def record_to_csv(
@@ -124,46 +142,66 @@ async def record_to_csv_tcp(
     first_row_deadline = loop.time() + TCP_CONNECT_TIMEOUT_S + 5.0
 
     def _reader_thread() -> None:
+        # Reconnect loop: the ESP32's tcp_server closes the client on any send
+        # error (e.g. transient LWIP ENOMEM). Without this loop a single hiccup
+        # would kill the recording. We keep reopening until Stop or repeated
+        # connect failures.
+        parser_state = ParserState()
+        consecutive_connect_failures = 0
+        last_exc: BaseException | None = None
         try:
-            sock = socket.create_connection((host, tcp_port), timeout=TCP_CONNECT_TIMEOUT_S)
-        except OSError as exc:
-            print(f"[recorder] TCP connect failed: {exc}")
-            loop.call_soon_threadsafe(error_queue.put_nowait, exc)
-            loop.call_soon_threadsafe(row_queue.put_nowait, None)
-            return
-        try:
-            sock.settimeout(2.0)
-            stream = sock.makefile("rb")
-            parser_state = ParserState()
             while not cancel_event.is_set():
                 try:
-                    raw = stream.readline()
-                except (socket.timeout, TimeoutError):
+                    sock = socket.create_connection((host, tcp_port), timeout=TCP_CONNECT_TIMEOUT_S)
+                except OSError as exc:
+                    consecutive_connect_failures += 1
+                    last_exc = exc
+                    print(f"[recorder] TCP connect failed ({consecutive_connect_failures}): {exc}")
+                    if consecutive_connect_failures >= 5:
+                        loop.call_soon_threadsafe(error_queue.put_nowait, exc)
+                        return
+                    if _sleep_interruptible(cancel_event, 1.5):
+                        return
                     continue
-                if not raw:
-                    break
-                row = parse_serial_line(raw, parser_state, estado)
-                if row is None:
+
+                consecutive_connect_failures = 0
+                try:
+                    _enable_keepalive(sock)
+                    sock.settimeout(5.0)
+                    stream = sock.makefile("rb")
+                    while not cancel_event.is_set():
+                        try:
+                            raw = stream.readline()
+                        except (socket.timeout, TimeoutError):
+                            continue
+                        except OSError as exc:
+                            last_exc = exc
+                            print(f"[recorder] read error, reconnecting: {exc}")
+                            break
+                        if not raw:
+                            print("[recorder] peer closed, reconnecting...")
+                            break
+                        row = parse_serial_line(raw, parser_state, estado)
+                        if row is None:
+                            try:
+                                text = raw.decode("utf-8", errors="replace").rstrip()
+                                if text and text[0] in "IWED" and " (" in text[:20]:
+                                    print(f"[esp32] {text}")
+                            except Exception:
+                                pass
+                            continue
+                        # Drop the on-board `predicted` column so the WiFi CSV
+                        # matches the USB/serial format (7 fields).
+                        parts = row.split(",")
+                        if len(parts) == 8:
+                            row = ",".join(parts[:6] + parts[7:])
+                        loop.call_soon_threadsafe(row_queue.put_nowait, row)
+                finally:
                     try:
-                        text = raw.decode("utf-8", errors="replace").rstrip()
-                        if text and text[0] in "IWED" and " (" in text[:20]:
-                            print(f"[esp32] {text}")
-                    except Exception:
+                        sock.close()
+                    except OSError:
                         pass
-                    continue
-                # Drop the on-board `predicted` column so the WiFi CSV matches
-                # the USB/serial format (7 fields, ending in estado).
-                parts = row.split(",")
-                if len(parts) == 8:
-                    row = ",".join(parts[:6] + parts[7:])
-                loop.call_soon_threadsafe(row_queue.put_nowait, row)
-        except BaseException as exc:
-            loop.call_soon_threadsafe(error_queue.put_nowait, exc)
         finally:
-            try:
-                sock.close()
-            except OSError:
-                pass
             loop.call_soon_threadsafe(row_queue.put_nowait, None)
 
     with open(out_path, "w", newline="", encoding="utf-8") as csv_file:
