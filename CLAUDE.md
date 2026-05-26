@@ -65,11 +65,22 @@ git add firmware/*.bin && git commit
 ### CSV row format
 
 ```
-timestamp,dht_temp,dht_humedad,ks_temp,light,soil_humidity,estado
-2026-05-19 14:23:01,23.45,55.0,22.10,2153,1766,Ideal
+timestamp,dht_temp,dht_humedad,ks_temp,light,soil_humidity,predicted,estado
+2026-05-26 14:23:01,23.45,55.0,22.10,2153,1766,Ideal,Ideal
 ```
 
-`estado` values: `Decaida`, `Estable`, `Ideal` (or custom label passed at startup).
+`predicted` = inference result from the ESP32's embedded DecisionTree.  
+`estado` = human label assigned at session start.
+
+### Analysis page (`frontend/app/analysis.py`, `/analysis`)
+
+Serves EDA plots, model comparison metrics, and live multi-model predictions.
+Requires `eda/models/` to be populated by running `eda/modelo.ipynb` end-to-end (generates `*.joblib`, `metrics.json`, `confusion_*.png`).
+
+- If `eda/models/` is missing, the app starts in degraded mode: `/analysis` shows a banner but `/` (recording) still works.
+- **Regenerate models** whenever `eda/datos*.csv` files change: re-run `modelo.ipynb` from top to bottom.
+- `frontend/requirements.txt` now includes the ML stack (pandas, numpy, scikit-learn, matplotlib, seaborn, joblib). Run `pip install -r frontend/requirements.txt` after pulling if deps changed.
+- sklearn joblib files are version-sensitive; if sklearn major version changes, regenerate `eda/models/`.
 
 ### Shared parser (`common/parser.py`)
 
@@ -100,5 +111,9 @@ Runs the serial reader in a thread to avoid blocking the async event loop. Rows 
 | `common/parser.py` | Shared serial line parser |
 | `firmware/*.bin` | Pre-built ESP32 binaries |
 | `embedded/main/` | ESP-IDF firmware source |
-| `eda/main.ipynb` | Data analysis notebook |
+| `eda/main.ipynb` | Descriptive EDA notebook |
+| `eda/modelo.ipynb` | Model training + export notebook |
 | `eda/datos[1-9].csv` | Sample recordings |
+| `eda/models/` | Trained pipelines (.joblib), metrics.json, confusion PNGs — regenerate by running modelo.ipynb |
+| `frontend/app/analysis.py` | AnalysisService: loads models, renders EDA plots, predict_all |
+| `frontend/static/analysis.html` | Analysis page |

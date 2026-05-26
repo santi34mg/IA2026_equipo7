@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Análisis — ESP32 Plant Measurement</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <span class="brand-leaf" aria-hidden="true">🌿</span>
+      <h1>Análisis de Modelos</h1>
+      <a href="/" class="btn btn-secondary" style="text-decoration:none">← Medición</a>
+    </header>
+
+    <div id="noModelsBanner" class="banner banner-warning" style="display:none">
+      <strong>Modelos no encontrados.</strong>
+      Corré <code>eda/modelo.ipynb</code> completo para generar <code>eda/models/</code>.
+    </div>
+
+    <!-- EDA -->
+    <section class="card">
+      <h2>Exploración de Datos (EDA)</h2>
+      <p class="hint">Gráficos generados a partir de los 9 datasets de entrenamiento.</p>
+      <div id="edaSpinner" style="color:#666; font-size:.9rem;">Renderizando…</div>
+      <div id="edaGrid" class="eda-grid"></div>
+    </section>
+
+    <!-- Model comparison -->
+    <section class="card" id="comparisonSection">
+      <h2>Comparación de Modelos</h2>
+      <div id="metricsTableWrap">
+        <p class="hint" id="metricsLoading">Cargando métricas…</p>
+        <div style="overflow-x:auto;">
+          <table id="metricsTable" class="metrics-table" style="display:none"></table>
+        </div>
+      </div>
+      <h2 style="margin-top:1.25rem;">Matrices de Confusión</h2>
+      <div id="confusionGrid" class="confusion-grid"></div>
+    </section>
+
+    <!-- Live multi-predict -->
+    <section class="card">
+      <h2>Predicciones Live</h2>
+      <p class="hint">Iniciá una sesión de medición en la página principal para ver las predicciones de todos los modelos en tiempo real.</p>
+      <div id="liveStatus" class="hint" style="color:#888;">Sin sesión activa.</div>
+      <div id="liveGrid" class="live-grid" style="display:none"></div>
+    </section>
+  </div>
+
+  <script src="/static/analysis.js"></script>
+</body>
+</html>

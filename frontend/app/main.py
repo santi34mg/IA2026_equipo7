@@ -5,9 +5,10 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Response, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from .analysis import MODELS_DIR, AnalysisService
 from .firmware import firmware_status, validate_firmware
 from .models import (
     FirmwareResponse,
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="ESP32 Plant Measurement")
     app.state.sessions = SessionManager()
     app.state.bus = WSBus()
+    app.state.analysis = AnalysisService()
 
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
@@ -88,6 +90,46 @@ def create_app() -> FastAPI:
             return ValidatePathResponse(ok=False, exists=exists, parent_writeable=False, reason="Parent directory is not writeable.")
         return ValidatePathResponse(ok=True, exists=exists, parent_writeable=True)
 
+    @app.get("/analysis", include_in_schema=False)
+    async def analysis_page() -> FileResponse:
+        return FileResponse(str(STATIC_DIR / "analysis.html"))
+
+    @app.get("/api/models")
+    async def get_models() -> JSONResponse:
+        svc: AnalysisService = app.state.analysis
+        if not svc.available:
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "Models not loaded. Run eda/modelo.ipynb first."},
+            )
+        return JSONResponse(svc.metrics)
+
+    @app.get("/api/eda/plots")
+    async def list_eda_plots() -> JSONResponse:
+        from .analysis import EDA_PLOTS
+        return JSONResponse({"plots": [{"id": k, "label": v} for k, v in EDA_PLOTS.items()]})
+
+    @app.get("/api/eda/plot/{name}")
+    async def get_eda_plot(name: str) -> Response:
+        svc: AnalysisService = app.state.analysis
+        if svc._df is None:
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "Data not loaded. Check that eda/datos*.csv files exist."},
+            )
+        try:
+            png = await svc.render_plot_async(name)
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"Unknown plot: {name}")
+        return Response(content=png, media_type="image/png")
+
+    @app.get("/api/eda/confusion/{model_name}")
+    async def get_confusion(model_name: str) -> FileResponse:
+        png_path = MODELS_DIR / f"confusion_{model_name}.png"
+        if not png_path.exists():
+            raise HTTPException(status_code=404, detail=f"Confusion matrix not found for model: {model_name}")
+        return FileResponse(str(png_path), media_type="image/png")
+
     @app.post("/api/session", response_model=SessionView, status_code=201)
     async def start_session(req: StartRequest) -> SessionView:
         # Port + firmware checks only apply to USB mode (WiFi skips the flash step entirely).
@@ -101,7 +143,8 @@ def create_app() -> FastAPI:
                     validate_firmware()
                 except FileNotFoundError as exc:
                     raise HTTPException(status_code=503, detail=str(exc))
-        session = await app.state.sessions.start(req, app.state.bus, mock=MOCK)
+        session = await app.state.sessions.start(req, app.state.bus, mock=MOCK,
+                                                  analysis=app.state.analysis)
         return session.to_view()
 
     @app.get("/api/session")

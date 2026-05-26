@@ -29,6 +29,7 @@ class Session:
     manual_ip: str | None = None  # set if user typed an IP to skip discovery
     cancel_event: asyncio.Event = field(default_factory=asyncio.Event)
     task: asyncio.Task | None = None
+    analysis: object = None  # AnalysisService, optional
 
     def to_view(self) -> SessionView:
         return SessionView(
@@ -57,7 +58,7 @@ class SessionManager:
     def current(self) -> Session | None:
         return self._current
 
-    async def start(self, req: StartRequest, bus: "WSBus", mock: bool = False) -> Session:
+    async def start(self, req: StartRequest, bus: "WSBus", mock: bool = False, analysis=None) -> Session:
         async with self._lock:
             if self._current and self._current.state in _ACTIVE_STATES:
                 raise HTTPException(status_code=409, detail="A session is already in progress.")
@@ -86,6 +87,7 @@ class SessionManager:
                 out_path=out,
                 started_at=datetime.now(),
                 manual_ip=manual_ip,
+                analysis=analysis,
             )
             self._current = session
 
@@ -152,6 +154,7 @@ class SessionManager:
                 "session_id": session.id,
                 "data": {"row": row, "count": count},
             })
+            _maybe_broadcast_multi_predict(session, bus, row)
 
         await record_fn(
             session.port, session.out_path, session.estado,
@@ -223,6 +226,7 @@ class SessionManager:
                 "session_id": session.id,
                 "data": {"row": row, "count": count},
             })
+            _maybe_broadcast_multi_predict(session, bus, row)
 
         await record_fn(
             discovered.ip, discovered.tcp_port, session.out_path, session.estado,
@@ -245,3 +249,32 @@ class SessionManager:
 def _is_writeable(path: Path) -> bool:
     import os
     return os.access(path, os.W_OK)
+
+
+def _maybe_broadcast_multi_predict(session: "Session", bus: "WSBus", row: str) -> None:
+    """Fire-and-forget multi-model prediction broadcast.
+
+    Row format: timestamp,dht_temp,dht_hum,ks_temp,light,soil,predicted,estado
+    Features: [dht_temp(col1), light(col4), soil(col5)]
+    """
+    if session.analysis is None or not session.analysis.available:
+        return
+    try:
+        parts = row.split(",")
+        if len(parts) < 6:
+            return
+        temp     = float(parts[1])
+        light    = float(parts[4])
+        moisture = float(parts[5])
+    except (ValueError, IndexError):
+        return
+
+    preds = session.analysis.predict_all([temp, light, moisture])
+    if not preds:
+        return
+
+    asyncio.ensure_future(bus.broadcast({
+        "type": "multi_predict",
+        "session_id": session.id,
+        "data": preds,
+    }))
