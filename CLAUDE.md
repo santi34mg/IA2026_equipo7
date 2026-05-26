@@ -32,16 +32,16 @@ Linux users need serial port access: `sudo usermod -aG dialout $USER`
 
 ```bash
 # Record sensor data over USB
-PYTHONPATH=. .venv/bin/python record_csv.py [estado]
+PYTHONPATH=. .venv/bin/python tools/record_csv.py [estado]
 
 # Configure WiFi credentials over USB
-python configure_wifi.py [port]
+python tools/configure_wifi.py [port]
 
 # Live serial monitor
-python monitor_esp32.py
+python tools/monitor_esp32.py
 
 # Record over WiFi
-python record_csv_wifi.py
+python tools/record_csv_wifi.py
 ```
 
 ### EDA notebook
@@ -113,7 +113,10 @@ Runs the serial reader in a thread to avoid blocking the async event loop. Rows 
 | `embedded/main/` | ESP-IDF firmware source |
 | `eda/main.ipynb` | Descriptive EDA notebook |
 | `eda/modelo.ipynb` | Model training + export notebook |
-| `eda/datos[1-9].csv` | Sample recordings |
+| `eda/datos[1-9].csv` | Training recordings (used by notebooks + frontend) |
+| `data/raw/` | Full original recordings (not loaded by code) |
+| `tools/` | CLI scripts: record_csv.py, record_csv_wifi.py, configure_wifi.py, monitor_esp32.py |
 | `eda/models/` | Trained pipelines (.joblib), metrics.json, confusion PNGs — regenerate by running modelo.ipynb |
 | `frontend/app/analysis.py` | AnalysisService: loads models, renders EDA plots, predict_all |
 | `frontend/static/analysis.html` | Analysis page |
+| `docs/` | Academic report, changelog, assignment handout |

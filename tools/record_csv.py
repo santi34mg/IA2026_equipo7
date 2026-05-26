@@ -20,6 +20,7 @@ except ImportError:
     print("pyserial not found. Install it with:  pip install pyserial")
     sys.exit(1)
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from common.parser import ParserState, parse_serial_line
 
 DEFAULT_BAUD = 115200

@@ -1,6 +1,0 @@
-pyproject.toml
-eda.egg-info/PKG-INFO
-eda.egg-info/SOURCES.txt
-eda.egg-info/dependency_links.txt
-eda.egg-info/requires.txt
-eda.egg-info/top_level.txt
