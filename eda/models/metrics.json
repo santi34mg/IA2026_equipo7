@@ -1,0 +1,206 @@
+{
+  "labels": [
+    "Decaida",
+    "Estable",
+    "Ideal"
+  ],
+  "features": [
+    "temperatura",
+    "luz",
+    "humedad_suelo"
+  ],
+  "models": {
+    "LogisticRegression": {
+      "accuracy": 0.8298,
+      "macro_f1": 0.8357,
+      "f1_per_class": {
+        "Decaida": 0.9794,
+        "Estable": 0.7969,
+        "Ideal": 0.7308
+      },
+      "confusion_matrix": [
+        [
+          95,
+          0,
+          0
+        ],
+        [
+          0,
+          102,
+          51
+        ],
+        [
+          4,
+          1,
+          76
+        ]
+      ],
+      "cv_macro_f1_mean": 0.8238,
+      "cv_macro_f1_std": 0.0154,
+      "roc_auc": 0.9446,
+      "exported_kb": 1.72,
+      "is_selected": false,
+      "exportable": true
+    },
+    "DecisionTree_d4": {
+      "accuracy": 1.0,
+      "macro_f1": 1.0,
+      "f1_per_class": {
+        "Decaida": 1.0,
+        "Estable": 1.0,
+        "Ideal": 1.0
+      },
+      "confusion_matrix": [
+        [
+          95,
+          0,
+          0
+        ],
+        [
+          0,
+          153,
+          0
+        ],
+        [
+          0,
+          0,
+          81
+        ]
+      ],
+      "cv_macro_f1_mean": 0.9992,
+      "cv_macro_f1_std": 0.0016,
+      "roc_auc": 1.0,
+      "exported_kb": 1.45,
+      "is_selected": true,
+      "exportable": true
+    },
+    "DecisionTree_d6": {
+      "accuracy": 1.0,
+      "macro_f1": 1.0,
+      "f1_per_class": {
+        "Decaida": 1.0,
+        "Estable": 1.0,
+        "Ideal": 1.0
+      },
+      "confusion_matrix": [
+        [
+          95,
+          0,
+          0
+        ],
+        [
+          0,
+          153,
+          0
+        ],
+        [
+          0,
+          0,
+          81
+        ]
+      ],
+      "cv_macro_f1_mean": 0.9992,
+      "cv_macro_f1_std": 0.0016,
+      "roc_auc": 1.0,
+      "exported_kb": 1.45,
+      "is_selected": false,
+      "exportable": true
+    },
+    "RandomForest": {
+      "accuracy": 1.0,
+      "macro_f1": 1.0,
+      "f1_per_class": {
+        "Decaida": 1.0,
+        "Estable": 1.0,
+        "Ideal": 1.0
+      },
+      "confusion_matrix": [
+        [
+          95,
+          0,
+          0
+        ],
+        [
+          0,
+          153,
+          0
+        ],
+        [
+          0,
+          0,
+          81
+        ]
+      ],
+      "cv_macro_f1_mean": 1.0,
+      "cv_macro_f1_std": 0.0,
+      "roc_auc": 1.0,
+      "exported_kb": 40.75,
+      "is_selected": false,
+      "exportable": true
+    },
+    "GaussianNB": {
+      "accuracy": 0.8389,
+      "macro_f1": 0.8522,
+      "f1_per_class": {
+        "Decaida": 0.785,
+        "Estable": 0.8166,
+        "Ideal": 0.9548
+      },
+      "confusion_matrix": [
+        [
+          84,
+          11,
+          0
+        ],
+        [
+          35,
+          118,
+          0
+        ],
+        [
+          0,
+          7,
+          74
+        ]
+      ],
+      "cv_macro_f1_mean": 0.8396,
+      "cv_macro_f1_std": 0.0245,
+      "roc_auc": 0.935,
+      "exported_kb": null,
+      "is_selected": false,
+      "exportable": false
+    },
+    "KNN": {
+      "accuracy": 1.0,
+      "macro_f1": 1.0,
+      "f1_per_class": {
+        "Decaida": 1.0,
+        "Estable": 1.0,
+        "Ideal": 1.0
+      },
+      "confusion_matrix": [
+        [
+          95,
+          0,
+          0
+        ],
+        [
+          0,
+          153,
+          0
+        ],
+        [
+          0,
+          0,
+          81
+        ]
+      ],
+      "cv_macro_f1_mean": 1.0,
+      "cv_macro_f1_std": 0.0,
+      "roc_auc": 1.0,
+      "exported_kb": null,
+      "is_selected": false,
+      "exportable": false
+    }
+  }
+}
