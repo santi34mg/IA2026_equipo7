@@ -138,7 +138,8 @@ def create_app() -> FastAPI:
                 raise HTTPException(status_code=400, detail="USB mode requires a serial port.")
             if not MOCK and not port_exists(req.port):
                 raise HTTPException(status_code=400, detail=f"Port not found: {req.port}")
-            if not MOCK:
+            is_simulation = (req.port or "").startswith("rfc2217://")
+            if not MOCK and not is_simulation:
                 try:
                     validate_firmware()
                 except FileNotFoundError as exc:

@@ -22,8 +22,9 @@ def parse_serial_line(raw: bytes, state: ParserState, estado: str | None) -> str
     should be skipped (ESP-IDF log line, blank, decode error, no numeric
     first column).
 
-    Replaces the uptime seconds in column 0 with a real wall-clock
-    timestamp anchored to the first data row received.
+    Replaces uptime seconds in column 0 with a real wall-clock timestamp
+    anchored to the first data row received. Also accepts firmware output
+    that already emits a Unix epoch timestamp in column 0.
 
     The firmware appends a `predicted` column (Decaida/Estable/Ideal) to each
     row; this function passes it through as-is. Appends ,<estado> when estado
@@ -44,11 +45,14 @@ def parse_serial_line(raw: bytes, state: ParserState, estado: str | None) -> str
     parts = line.split(",")
     try:
         uptime = float(parts[0])
-        if state.t0 is None:
-            state.t0 = datetime.datetime.now()
-            state.uptime0 = uptime
-        ts = state.t0 + datetime.timedelta(seconds=(uptime - state.uptime0))
-        parts[0] = ts.strftime("%Y-%m-%d %H:%M:%S")
+        if uptime >= 1_000_000_000:
+            parts[0] = datetime.datetime.fromtimestamp(uptime).strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            if state.t0 is None:
+                state.t0 = datetime.datetime.now()
+                state.uptime0 = uptime
+            ts = state.t0 + datetime.timedelta(seconds=(uptime - state.uptime0))
+            parts[0] = ts.strftime("%Y-%m-%d %H:%M:%S")
         line = ",".join(parts)
     except (ValueError, IndexError):
         return None

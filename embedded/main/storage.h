@@ -23,4 +23,5 @@ public:
 
 private:
     esp_err_t ensure_csv_header();
+    bool m_spiffs_ok = false;
 };

@@ -28,33 +28,40 @@ async def record_to_csv(
     Returns total rows written. The CSV file is always flushed/closed.
     """
     import serial
+    from .ports import is_rfc2217_port
 
     loop = asyncio.get_running_loop()
     row_queue: asyncio.Queue[str | None] = asyncio.Queue()
+    error_queue: asyncio.Queue[BaseException | None] = asyncio.Queue(maxsize=1)
     row_count = 0
+    first_row_deadline = loop.time() + first_data_timeout_s
 
     def _reader_thread() -> None:
         """Blocking serial reader — runs in a thread via asyncio.to_thread."""
-        with serial.Serial(port, BAUD, timeout=2) as ser:
-            parser_state = ParserState()
-            got_first_row = False
-            while not cancel_event.is_set():
-                raw = ser.readline()
-                if not raw:
-                    continue
-                row = parse_serial_line(raw, parser_state, estado)
-                if row is None:
-                    # Echo ESP-IDF log lines to console for debugging
-                    try:
-                        text = raw.decode("utf-8", errors="replace").rstrip()
-                        if text and text[0] in "IWED" and " (" in text[:20]:
-                            print(f"[esp32] {text}")
-                    except Exception:
-                        pass
-                    continue
-                got_first_row = True
-                loop.call_soon_threadsafe(row_queue.put_nowait, row)
-        loop.call_soon_threadsafe(row_queue.put_nowait, None)  # sentinel
+        serial_open = serial.serial_for_url if is_rfc2217_port(port) else serial.Serial
+
+        try:
+            with serial_open(port, BAUD, timeout=2) as ser:
+                parser_state = ParserState()
+                while not cancel_event.is_set():
+                    raw = ser.readline()
+                    if not raw:
+                        continue
+                    row = parse_serial_line(raw, parser_state, estado)
+                    if row is None:
+                        # Echo ESP-IDF log lines to console for debugging
+                        try:
+                            text = raw.decode("utf-8", errors="replace").rstrip()
+                            if text and text[0] in "IWED" and " (" in text[:20]:
+                                print(f"[esp32] {text}")
+                        except Exception:
+                            pass
+                        continue
+                    loop.call_soon_threadsafe(row_queue.put_nowait, row)
+        except BaseException as exc:
+            loop.call_soon_threadsafe(error_queue.put_nowait, exc)
+        finally:
+            loop.call_soon_threadsafe(row_queue.put_nowait, None)  # sentinel
 
     with open(out_path, "w", newline="", encoding="utf-8") as csv_file:
         csv_file.write(CSV_HEADER)
@@ -69,9 +76,19 @@ async def record_to_csv(
                 except asyncio.TimeoutError:
                     if cancel_event.is_set():
                         break
+                    if row_count == 0 and loop.time() > first_row_deadline:
+                        raise TimeoutError(f"No serial data received from {port} within {first_data_timeout_s:.0f}s.")
+                    if not error_queue.empty():
+                        exc = await error_queue.get()
+                        if exc is not None:
+                            raise exc
                     continue
 
                 if row is None:  # thread exited
+                    if not error_queue.empty():
+                        exc = await error_queue.get()
+                        if exc is not None:
+                            raise exc
                     break
 
                 csv_file.write(row + "\n")
@@ -102,14 +119,17 @@ async def record_to_csv_tcp(
     """
     loop = asyncio.get_running_loop()
     row_queue: asyncio.Queue[str | None] = asyncio.Queue()
+    error_queue: asyncio.Queue[BaseException | None] = asyncio.Queue(maxsize=1)
     row_count = 0
+    first_row_deadline = loop.time() + TCP_CONNECT_TIMEOUT_S + 5.0
 
     def _reader_thread() -> None:
         try:
             sock = socket.create_connection((host, tcp_port), timeout=TCP_CONNECT_TIMEOUT_S)
         except OSError as exc:
-            loop.call_soon_threadsafe(row_queue.put_nowait, None)
             print(f"[recorder] TCP connect failed: {exc}")
+            loop.call_soon_threadsafe(error_queue.put_nowait, exc)
+            loop.call_soon_threadsafe(row_queue.put_nowait, None)
             return
         try:
             sock.settimeout(2.0)
@@ -132,6 +152,8 @@ async def record_to_csv_tcp(
                         pass
                     continue
                 loop.call_soon_threadsafe(row_queue.put_nowait, row)
+        except BaseException as exc:
+            loop.call_soon_threadsafe(error_queue.put_nowait, exc)
         finally:
             try:
                 sock.close()
@@ -152,9 +174,19 @@ async def record_to_csv_tcp(
                 except asyncio.TimeoutError:
                     if cancel_event.is_set():
                         break
+                    if row_count == 0 and loop.time() > first_row_deadline:
+                        raise TimeoutError(f"No TCP data received from {host}:{tcp_port} within the startup window.")
+                    if not error_queue.empty():
+                        exc = await error_queue.get()
+                        if exc is not None:
+                            raise exc
                     continue
 
                 if row is None:
+                    if not error_queue.empty():
+                        exc = await error_queue.get()
+                        if exc is not None:
+                            raise exc
                     break
 
                 csv_file.write(row + "\n")

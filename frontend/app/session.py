@@ -120,6 +120,9 @@ class SessionManager:
         flash_fn = flash_esp32_mock if mock else flash_esp32
         record_fn = record_to_csv_mock if mock else record_to_csv
 
+        # -- Flash --
+        await bus.broadcast({"type": "state", "session_id": session.id, "data": {"state": "flashing"}})
+
         if mock:
             layout = []
         else:
@@ -128,9 +131,6 @@ class SessionManager:
             except FileNotFoundError as exc:
                 await self._fail(session, bus, str(exc))
                 return
-
-        # -- Flash --
-        await bus.broadcast({"type": "state", "session_id": session.id, "data": {"state": "flashing"}})
 
         async def on_flash_line(line: str) -> None:
             await bus.broadcast({"type": "flash_log", "session_id": session.id, "data": {"line": line}})

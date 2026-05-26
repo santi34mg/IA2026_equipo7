@@ -4,14 +4,17 @@ from .models import PortInfo
 
 
 def list_serial_ports() -> list[PortInfo]:
+    ports = []
     try:
         import serial.tools.list_ports
     except ImportError:
-        return []
-    return [
-        PortInfo(device=p.device, description=p.description or "", hwid=p.hwid or "")
-        for p in serial.tools.list_ports.comports()
-    ]
+        pass
+    else:
+        ports.extend(
+            PortInfo(device=p.device, description=p.description or "", hwid=p.hwid or "")
+            for p in serial.tools.list_ports.comports()
+        )
+    return ports
 
 
 def port_exists(device: str) -> bool:

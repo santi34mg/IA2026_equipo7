@@ -140,13 +140,18 @@ extern "C" void app_main(void) {
 
     install_uart_console_driver();
 
-    ESP_ERROR_CHECK(g_sensor_manager.init());
+    printf("[boot] app_main started\n");
+    fflush(stdout);
+
+    ret = g_sensor_manager.init();
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Sensor init failed: %s — partial data expected", esp_err_to_name(ret));
+    }
     led_indicator::init();
 
     ret = g_storage_manager.init();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Storage init failed: %s", esp_err_to_name(ret));
-        return;
+        ESP_LOGW(TAG, "Storage init failed: %s — continuing without SPIFFS", esp_err_to_name(ret));
     }
 
     ret = g_wifi_manager.init();

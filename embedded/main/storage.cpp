@@ -76,9 +76,12 @@ esp_err_t StorageManager::init() {
 
     esp_err_t ret = esp_vfs_spiffs_register(&conf);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "SPIFFS mount failed: %s", esp_err_to_name(ret));
-        return ret;
+        ESP_LOGW(TAG, "SPIFFS unavailable (%s) — serial/TCP streaming only", esp_err_to_name(ret));
+        m_spiffs_ok = false;
+        return ESP_OK;  // non-fatal: serial streaming still works
     }
+
+    m_spiffs_ok = true;
 
     size_t total = 0;
     size_t used = 0;
@@ -141,23 +144,29 @@ void StorageManager::dump_csv_to_serial() {
 }
 
 esp_err_t StorageManager::append_row(int64_t timestamp_epoch, const SensorData &data, PlantState predicted) {
+    char row[208] = {};
+    size_t row_len = 0;
+    esp_err_t fmt_ret = storage_csv::build_row(row, sizeof(row), &row_len, timestamp_epoch, data, predicted);
+    if (fmt_ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to format CSV row: %s", esp_err_to_name(fmt_ret));
+        return fmt_ret;
+    }
+
+    // Always stream to serial and TCP regardless of SPIFFS state
+    printf("%s", row);
+    tcp_server_broadcast(row, row_len);
+
+    if (!m_spiffs_ok) {
+        return ESP_OK;
+    }
+
     FILE *file = fopen(kCsvPath, "a");
     if (file == nullptr) {
         ESP_LOGE(TAG, "Failed opening %s for append", kCsvPath);
         return ESP_FAIL;
     }
 
-    char row[208] = {};
-    size_t row_len = 0;
-    esp_err_t fmt_ret = storage_csv::build_row(row, sizeof(row), &row_len, timestamp_epoch, data, predicted);
-    if (fmt_ret != ESP_OK) {
-        fclose(file);
-        ESP_LOGE(TAG, "Failed to format CSV row: %s", esp_err_to_name(fmt_ret));
-        return fmt_ret;
-    }
-
     const int written = fprintf(file, "%s", row);
-
     fflush(file);
     fclose(file);
 
@@ -165,10 +174,6 @@ esp_err_t StorageManager::append_row(int64_t timestamp_epoch, const SensorData &
         ESP_LOGE(TAG, "Failed to append row to CSV");
         return ESP_FAIL;
     }
-
-    // Stream each new sample to serial as it's logged (row already ends in '\n')
-    printf("%s", row);
-    tcp_server_broadcast(row, row_len);
 
     return ESP_OK;
 }
