@@ -8,6 +8,8 @@
 #include "esp_log.h"
 #include "esp_spiffs.h"
 
+#include "tcp_server.h"
+
 namespace {
 constexpr const char *kBasePath = "/data";
 constexpr const char *kCsvPath = "/data/log.csv";
@@ -163,6 +165,7 @@ esp_err_t StorageManager::append_row(int64_t timestamp_epoch, const SensorData &
 
     // Stream each new sample to serial as it's logged (row already ends in '\n')
     printf("%s", row);
+    tcp_server_broadcast(row, row_len);
 
     return ESP_OK;
 }
