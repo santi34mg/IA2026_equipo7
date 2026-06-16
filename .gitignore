@@ -6,3 +6,5 @@
 *.egg-info/
 embedded/build/
 embedded/sdkconfig
+
+.claude/
