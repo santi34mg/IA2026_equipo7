@@ -140,7 +140,87 @@ void set_state(PlantState s) {
 
 ---
 
-## 6. Pruebas de inferencia en tiempo real
+## 6. Arquitectura del sistema
+
+### 6.1 Parser compartido (`common/parser.py`)
+
+Para evitar duplicación de lógica, se extrajo el parser de líneas seriales en un módulo compartido (`common/parser.py`). Tanto la herramienta CLI de grabación (`record_csv.py`) como el frontend web importan de aquí. El parser implementa:
+
+- Filtrado de líneas de log de ESP-IDF.
+- Conversión de segundos uptime del ESP32 a timestamp de reloj de pared.
+- Validación y formateo de columnas CSV.
+- Anexión de la columna `estado` (etiqueta asignada al inicio de sesión).
+
+### 6.2 Frontend web — FastAPI
+
+Se desarrolló una aplicación web moderna con FastAPI + Uvicorn que proporciona interfaz única para flashing, grabación y visualización de datos en vivo.
+
+**Estructura:**
+
+```
+frontend/
+├── requirements.txt                 # pyserial, esptool, fastapi, uvicorn, pydantic, pandas, numpy, scikit-learn, matplotlib, seaborn, joblib
+├── app/
+│   ├── main.py                      # Aplicación FastAPI, todas las rutas
+│   ├── models.py                    # Esquemas request/response (Pydantic)
+│   ├── session.py                   # Máquina de estados: idle → flashing → recording → idle
+│   ├── flasher.py                   # Ejecuta esptool como subprocess, transmite salida en vivo
+│   ├── recorder.py                  # Lee puerto serial, escribe CSV, emite filas por WebSocket
+│   ├── firmware.py                  # Valida presencia de binarios pre-compilados en firmware/*.bin
+│   ├── ports.py                     # Lista puertos seriales disponibles
+│   ├── discovery.py                 # Descubrimiento WiFi via UDP multicast
+│   ├── analysis.py                  # AnalysisService: carga modelos, renderiza gráficos EDA, predice en vivo
+│   └── ws_bus.py                    # Bus de broadcast WebSocket a todas las pestañas abiertas
+└── static/
+    ├── index.html                   # SPA única con interfaz de usuario
+    ├── analysis.html                # Página de análisis con gráficos EDA y predicciones live
+    ├── style.css                    # Estilos
+    ├── app.js                       # Máquina de estados vanilla JS
+    └── analysis.js                  # Lógica de análisis y predicciones
+```
+
+**Rutas principales:**
+
+- `GET /` → interfaz de flashing y grabación.
+- `GET /analysis` → panel de EDA, modelos cargados y predicciones en vivo.
+- `POST /flash` → inicia flashing, emite progreso por WebSocket.
+- `POST /record/start` → inicia grabación.
+- `POST /record/stop` → detiene grabación, devuelve path y número de filas.
+- `WS /ws` → WebSocket para estado de sesión y filas CSV en vivo.
+
+**Validación de modelos:** si el directorio `eda/models/` está ausente, la app inicia en modo degradado: `/` funciona normalmente pero `/analysis` muestra un banner indicando que los modelos no están cargados. **Regenerar modelos:** cada vez que cambien los archivos `eda/datos*.csv`, es necesario re-ejecutar `eda/modelo.ipynb` de principio a fin para regenerar `*.joblib`, `metrics.json` y gráficos de confusión.
+
+### 6.3 Directorio `firmware/`
+
+Almacena los tres binarios pre-compilados del ESP32:
+
+```
+firmware/
+├── README.md
+├── bootloader.bin
+├── partition-table.bin
+└── embedded.bin
+```
+
+Estos binarios son generados una vez por un desarrollador con ESP-IDF v6.0 instalado, y luego commiteados a git. De este modo, todos los demás pueden usar el frontend sin necesidad de tener ESP-IDF instalado.
+
+**Compilación (desarrollador con ESP-IDF):**
+
+```bash
+cd embedded
+idf.py build
+cd ..
+
+cp embedded/build/bootloader/bootloader.bin             firmware/
+cp embedded/build/partition_table/partition-table.bin   firmware/
+cp embedded/build/embedded.bin                          firmware/
+
+git add firmware/*.bin && git commit -m "Add pre-built firmware binaries"
+```
+
+---
+
+## 7. Pruebas de inferencia en tiempo real
 
 ### Log de serial (header + muestras reales)
 
@@ -159,7 +239,7 @@ El frontend web (`/analysis`) muestra el panel **"Predicciones Live"**: al inici
 
 ---
 
-## 7. Discusión
+## 8. Discusión
 
 **Ventajas del modelo elegido:** footprint de 2.12 KB (menos del 0.01 % de la RAM del ESP32), inferencia en O(profundidad) ≈ 4 comparaciones, completamente determinista, sin librerías de runtime externas, interpretable e inspeccionable directamente en el código.
 
@@ -177,3 +257,96 @@ El frontend web (`/analysis`) muestra el panel **"Predicciones Live"**: al inici
 - Sensores de reemplazo funcionales para humedad ambiente.
 - Actuador físico de riego automático accionado cuando la predicción sea Decaida por N ciclos consecutivos.
 - Re-entrenar con datos de más especies de plantas para generalizar el sistema.
+
+---
+
+## 9. Instrucciones de instalación y ejecución
+
+### 9.1 Setup inicial
+
+**Instalación de dependencias Python:**
+
+```bash
+.venv/bin/pip install -r frontend/requirements.txt
+```
+
+**Permiso de puerto serial (solo Linux):**
+
+```bash
+sudo usermod -aG dialout $USER
+# luego cerrar sesión y volver a iniciar (o ejecutar: newgrp dialout)
+```
+
+**Setup de firmware pre-compilado (una sola vez):**
+
+Un desarrollador con ESP-IDF v6.0 debe compilar y copiar los binarios una vez. Luego se commitean a git para que todos los demás puedan usarlos directamente.
+
+```bash
+cd embedded
+idf.py build
+cd ..
+
+cp embedded/build/bootloader/bootloader.bin             firmware/
+cp embedded/build/partition_table/partition-table.bin   firmware/
+cp embedded/build/embedded.bin                          firmware/
+
+git add firmware/*.bin && git commit -m "Add pre-built firmware binaries"
+```
+
+### 9.2 Ejecución
+
+**Modo normal (con ESP32 y binarios de firmware):**
+
+```bash
+PYTHONPATH=. .venv/bin/python -m uvicorn frontend.app.main:app --host 127.0.0.1 --port 8000
+```
+
+Abrir **http://localhost:8000** en el navegador.
+
+1. Seleccionar puerto serial (click en **Refresh** si el ESP32 no aparece).
+2. Elegir estado de la planta: `Decaida`, `Estable`, `Ideal`, o ingresar una etiqueta personalizada.
+3. Ingresar ruta completa para el CSV de salida (ej: `/home/user/recordings/run1.csv`). Click en **Validate** para validar.
+4. Click en **Run measurement** — se flashea el ESP32, luego inicia grabación automáticamente.
+5. Click en **Stop** al terminar. Se muestran ruta de CSV y número de filas.
+
+**Modo mock (sin ESP32):**
+
+Útil para desarrollo e testing de la UI. Simula el flujo completo con datos sintéticos.
+
+```bash
+PYTHONPATH=. FRONTEND_MOCK=1 .venv/bin/python -m uvicorn frontend.app.main:app --host 127.0.0.1 --port 8000
+```
+
+**Grabadora CLI (sin cambios respecto a la versión anterior):**
+
+La herramienta de línea de comandos original sigue funcionando:
+
+```bash
+# sin etiqueta
+PYTHONPATH=. .venv/bin/python record_csv.py
+
+# con etiqueta
+PYTHONPATH=. .venv/bin/python record_csv.py Ideal
+```
+
+### 9.3 Formato de CSV de salida
+
+```
+timestamp,dht_temp,dht_humedad,ks_temp,light,soil_humidity,predicted,estado
+2026-05-26 14:23:01,23.45,55.0,22.10,2153,1766,Ideal,Ideal
+```
+
+Una fila cada ~2.5 segundos. Compatible con `eda/main.ipynb` y `eda/modelo.ipynb`.
+
+### 9.4 Notebook EDA
+
+```bash
+cd eda && jupyter notebook main.ipynb
+```
+
+Para regenerar los modelos tras cambios en `datos*.csv`:
+
+```bash
+cd eda && jupyter notebook modelo.ipynb
+# ejecutar de principio a fin
+```
