@@ -8,9 +8,10 @@ class GeminiClient:
 
     def embed(self, text: str, task_type: str = "retrieval_query") -> list[float]:
         result = genai.embed_content(
-            model="models/text-embedding-004",
+            model="models/gemini-embedding-001",
             content=text,
             task_type=task_type,
+            output_dimensionality=768,
         )
         return result["embedding"]
 
