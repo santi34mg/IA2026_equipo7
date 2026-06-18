@@ -3,7 +3,6 @@ import platform
 from datetime import datetime
 from pathlib import Path
 
-import uvicorn
 from fastapi import FastAPI, HTTPException, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -185,4 +184,5 @@ def create_app() -> FastAPI:
 app = create_app()
 
 if __name__ == "__main__":
+    import uvicorn
     uvicorn.run("frontend.app.main:app", host="127.0.0.1", port=8000, reload=False)

@@ -3,15 +3,7 @@ import io
 import json
 import logging
 from pathlib import Path
-from typing import Optional
-
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-import seaborn as sns
-from sklearn.decomposition import PCA
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +56,7 @@ MOCK_METRICS = {
 
 class AnalysisService:
     def __init__(self, mock: bool = False) -> None:
-        self._df: Optional[pd.DataFrame] = None
+        self._df: Optional[Any] = None
         self._pipelines: dict = {}
         self._metrics: dict = {}
         self._available = False
@@ -122,6 +114,7 @@ class AnalysisService:
     def predict_all(self, features: list) -> dict:
         """Predict with all loaded pipelines. features = [temperatura, luz, humedad_suelo]."""
         if self._pipelines:
+            import numpy as np
             X = np.array([features], dtype=np.float32)
             out = {}
             for name, pipe in self._pipelines.items():
@@ -168,6 +161,9 @@ class AnalysisService:
             return await loop.run_in_executor(None, self._render_plot_sync, name)
 
     def _render_plot_sync(self, name: str) -> bytes:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
         dispatch = {
             "correlation":          self._plot_correlation,
             "class_distribution":   self._plot_class_distribution,
@@ -185,7 +181,9 @@ class AnalysisService:
 
     # ----- Plot implementations -----
 
-    def _plot_correlation(self) -> plt.Figure:
+    def _plot_correlation(self) -> Any:
+        import matplotlib.pyplot as plt
+        import seaborn as sns
         fig, ax = plt.subplots(figsize=(7, 5))
         corr = self._df[FEATURE_COLS].corr()
         sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm", ax=ax,
@@ -194,7 +192,8 @@ class AnalysisService:
         plt.tight_layout()
         return fig
 
-    def _plot_class_distribution(self) -> plt.Figure:
+    def _plot_class_distribution(self) -> Any:
+        import matplotlib.pyplot as plt
         fig, ax = plt.subplots(figsize=(6, 4))
         counts = self._df["label"].value_counts().reindex(LABEL_NAMES, fill_value=0)
         colors = ["#c0392b", "#e67e22", "#27ae60"]
@@ -210,7 +209,9 @@ class AnalysisService:
         plt.tight_layout()
         return fig
 
-    def _plot_pca(self) -> plt.Figure:
+    def _plot_pca(self) -> Any:
+        import matplotlib.pyplot as plt
+        from sklearn.decomposition import PCA
         from sklearn.preprocessing import StandardScaler as SS
         mask = self._df[FEATURE_COLS].notna().all(axis=1)
         X = self._df.loc[mask, FEATURE_COLS].values
@@ -231,7 +232,8 @@ class AnalysisService:
         plt.tight_layout()
         return fig
 
-    def _plot_histograms(self) -> plt.Figure:
+    def _plot_histograms(self) -> Any:
+        import matplotlib.pyplot as plt
         colors_map = {"Decaida": "red", "Estable": "orange", "Ideal": "green"}
         fig, axes = plt.subplots(1, 3, figsize=(14, 4))
         for i, col in enumerate(FEATURE_COLS):
@@ -246,7 +248,9 @@ class AnalysisService:
         plt.tight_layout()
         return fig
 
-    def _plot_boxplots(self) -> plt.Figure:
+    def _plot_boxplots(self) -> Any:
+        import matplotlib.pyplot as plt
+        import seaborn as sns
         colors_map = {"Decaida": "#c0392b", "Estable": "#e67e22", "Ideal": "#27ae60"}
         palette = [colors_map[l] for l in LABEL_NAMES]
         fig, axes = plt.subplots(1, 3, figsize=(14, 4))
@@ -259,7 +263,8 @@ class AnalysisService:
         plt.tight_layout()
         return fig
 
-    def _plot_feature_separability(self) -> plt.Figure:
+    def _plot_feature_separability(self) -> Any:
+        import matplotlib.pyplot as plt
         colors_map = {"Decaida": "red", "Estable": "orange", "Ideal": "green"}
         fig, ax = plt.subplots(figsize=(7, 5))
         for lbl, color in colors_map.items():
@@ -275,7 +280,8 @@ class AnalysisService:
 
     # ----- Data loading -----
 
-    def _load_csvs(self) -> pd.DataFrame:
+    def _load_csvs(self) -> Any:
+        import pandas as pd
         col_names    = ["temperatura", "humedad", "luz", "humedad_suelo", "label"]
         col_names_ts = ["timestamp"] + col_names
         archivos = {
