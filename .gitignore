@@ -8,3 +8,4 @@ embedded/build/
 embedded/sdkconfig
 
 .claude/
+.vercel
