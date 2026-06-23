@@ -64,7 +64,10 @@ def create_app() -> FastAPI:
 
     @app.get("/", include_in_schema=False)
     async def index() -> FileResponse:
-        return FileResponse(str(STATIC_DIR / "index.html"))
+        # Hosted (Vercel sets FRONTEND_MOCK=1): show the live Supabase dashboard.
+        # Locally (real hardware): show the flashing/recording tool.
+        page = "live.html" if MOCK else "index.html"
+        return FileResponse(str(STATIC_DIR / page))
 
     @app.get("/api/config")
     async def get_config() -> JSONResponse:
