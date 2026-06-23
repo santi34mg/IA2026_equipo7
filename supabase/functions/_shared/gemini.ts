@@ -1,12 +1,14 @@
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
 const BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
+// gemini-2.0-flash quedó sin cuota gratuita (limit: 0). 2.5-flash sí tiene.
+const CHAT_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.5-flash";
 
 export async function geminiChat(
   systemPrompt: string,
   history: { role: string; content: string }[],
   userMessage: string
 ): Promise<string> {
-  const url = `${BASE_URL}/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+  const url = `${BASE_URL}/models/${CHAT_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
   const body = {
     systemInstruction: { parts: [{ text: systemPrompt }] },
     contents: [
