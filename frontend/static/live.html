@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flora — En Vivo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <span class="brand-leaf" aria-hidden="true">🌿</span>
+      <h1>Flora — En Vivo</h1>
+      <a href="/analysis" class="btn btn-secondary" style="text-decoration:none">Análisis →</a>
+    </header>
+
+    <section class="card">
+      <h2>Lectura Actual</h2>
+      <p class="hint">Datos en tiempo real desde Supabase — el ESP32 sube cada lectura.</p>
+      <p class="hint" id="liveStatus" style="color:#888;">Conectando a Supabase…</p>
+      <div id="liveValues" class="live-values" style="display:none">
+        <span>Temp: <b id="lvTemp">—</b> °C</span>
+        <span>Luz: <b id="lvLuz">—</b></span>
+        <span>Humedad suelo: <b id="lvHum">—</b></span>
+        <span class="prediction-badge" id="lvLabel" style="margin-left:auto">—</span>
+      </div>
+      <p class="hint" id="lvTime" style="margin-top:.5rem;"></p>
+      <canvas id="liveChart" width="640" height="180"
+              style="width:100%;max-width:640px;margin-top:.75rem;"></canvas>
+    </section>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/static/supabase.js"></script>
+  <script src="/static/live.js"></script>
+</body>
+</html>
