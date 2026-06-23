@@ -7,7 +7,6 @@
 embedded/build/
 embedded/sdkconfig
 
-.claude/
 .vercel
 
 # Secrets / local env — never commit (keys live here, not in tracked files)
