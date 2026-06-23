@@ -13,8 +13,9 @@ driven by a **Telegram webhook**. The Python code in `chatbot/` is local-dev onl
 
 When "the bot doesn't respond to messages", check these in order — they are the actual past causes:
 
-1. **Webhook deleted.** Running `chatbot/bot.py` locally calls `deleteWebhook` on startup and wipes the
-   Supabase webhook. Check with `getWebhookInfo` — if `url` is empty, this is it.
+1. **Webhook deleted.** Anything that runs Telegram long-polling against this bot token calls
+   `deleteWebhook` on startup and wipes the Supabase webhook. Check with `getWebhookInfo` —
+   if `url` is empty, this is it.
    ```bash
    TOKEN=$(grep '^TELEGRAM_BOT_TOKEN=' chatbot/.env | cut -d= -f2-)
    curl -s "https://api.telegram.org/bot${TOKEN}/getWebhookInfo"   # look at .result.url and .last_error_message
@@ -73,6 +74,6 @@ Final end-to-end confirmation: send the bot a real Telegram message; it should r
 
 ## Don'ts
 
-- **Don't run `chatbot/bot.py`** against the production token — it deletes the webhook.
+- **Don't run any Telegram long-polling client** against the production token — it deletes the webhook.
 - **Don't deploy `telegram-webhook` without `--no-verify-jwt`** — Telegram can't send a JWT, so updates would 401.
 - **Don't reuse `gemini-2.0-flash`** — it's quota-dead.

@@ -1,7 +1,7 @@
-python-telegram-bot[job-queue]>=21.0
-google-generativeai>=0.8
+# Dependencies for migrate_rag.py — refreshes the Supabase rag_chunks table.
+# The Telegram bot itself runs on Supabase Edge Functions (supabase/functions/), not here.
+google-genai>=0.3
+supabase>=2.0
 python-dotenv>=1.0
 numpy>=1.23
 pandas>=1.5
-joblib>=1.2
-scikit-learn>=1.2
