@@ -6,9 +6,10 @@
 namespace classifier {
 
 PlantState predict(const SensorData &data) {
-    // Features en el orden entrenado: temperatura_c, light_raw, moisture_raw
+    // Features en el orden entrenado: temperatura_c, light_raw, moisture_raw.
+    // Temperatura = KS0033: el DHT11 está roto y se descarta para la predicción.
     float raw[3] = {
-        data.dht11_temperature_c,
+        data.ks0033_temperature_c,
         static_cast<float>(data.light_raw),
         static_cast<float>(data.moisture_raw),
     };

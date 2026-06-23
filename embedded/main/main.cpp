@@ -14,6 +14,7 @@
 #include "led_indicator.h"
 #include "sensor.h"
 #include "storage.h"
+#include "supabase_client.h"
 #include "tcp_server.h"
 #include "time_service.h"
 #include "wifi_manager.h"
@@ -28,11 +29,28 @@ constexpr UBaseType_t kSerialCfgTaskPriority = 3;
 constexpr uint16_t kTcpPort = 8080;
 constexpr uint32_t kConnectTimeoutMs = 20000;
 
+constexpr uint32_t kWifiConnectStackSize = 4096;
+constexpr UBaseType_t kWifiConnectTaskPriority = 4;
+constexpr uint32_t kWifiRetryDelayMs = 10000;
+
 const char *TAG = "app_main";
 
 SensorManager g_sensor_manager;
 StorageManager g_storage_manager;
 // g_wifi_manager is defined in wifi_manager.cpp (extern in wifi_manager.h)
+
+// Bring up the LAN services once the device is online. Safe to call again on a
+// later (re)connection — the underlying start functions guard their own state.
+void start_online_services() {
+    esp_err_t ret = tcp_server_start(kTcpPort);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "TCP server failed to start: %s", esp_err_to_name(ret));
+    }
+    ret = discovery_start(kTcpPort);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Discovery failed to start: %s", esp_err_to_name(ret));
+    }
+}
 
 void logger_task(void * /*arg*/) {
     ESP_LOGI(TAG, "Logger task started (period: %" PRIu32 " ms)", kSamplePeriodMs);
@@ -50,6 +68,10 @@ void logger_task(void * /*arg*/) {
         if (g_storage_manager.append_row(timestamp_epoch, sensor_data, predicted) != ESP_OK) {
             ESP_LOGE(TAG, "Failed to append CSV row");
         }
+
+        // Dual-write: hand the reading to the cloud worker (non-blocking).
+        // It uploads to Supabase when online; the CSV above is the local buffer.
+        supabase_client_enqueue(timestamp_epoch, sensor_data, predicted);
 
         vTaskDelay(pdMS_TO_TICKS(kSamplePeriodMs));
     }
@@ -87,11 +109,39 @@ void handle_wifi_command(char *line) {
         printf("[wifi_cfg] CONNECT_OK ssid=%s ip=%s\n", ssid_buf, ip_buf);
 
         // Start (or re-confirm) the LAN services now that we're online.
-        tcp_server_start(kTcpPort);
-        discovery_start(kTcpPort);
+        start_online_services();
     } else {
         printf("[wifi_cfg] CONNECT_FAIL reason=%s\n", WifiManager::result_to_string(r));
     }
+}
+
+// Keep trying the known-network list until the device gets online, then bring
+// up the LAN services and exit. Unlike a one-shot boot connect, this survives a
+// router that is briefly unavailable at power-up. If WiFi comes up another way
+// (e.g. serial `WIFI:` config), this notices and exits without interfering.
+void wifi_connect_task(void * /*arg*/) {
+    while (true) {
+        if (g_wifi_manager.is_connected()) {
+            ESP_LOGI(TAG, "WiFi already connected — retry task exiting");
+            break;
+        }
+
+        const WifiConnectResult r = g_wifi_manager.auto_connect_blocking(kConnectTimeoutMs);
+        if (r == WifiConnectResult::Ok) {
+            char ssid[33] = {};
+            char ip[16] = {};
+            g_wifi_manager.get_connected_ssid(ssid, sizeof(ssid));
+            g_wifi_manager.get_ip_string(ip, sizeof(ip));
+            ESP_LOGI(TAG, "Online: ssid=\"%s\" ip=%s", ssid, ip);
+            start_online_services();
+            break;
+        }
+
+        ESP_LOGW(TAG, "WiFi connect failed (%s) — retrying in %" PRIu32 " ms",
+                 WifiManager::result_to_string(r), kWifiRetryDelayMs);
+        vTaskDelay(pdMS_TO_TICKS(kWifiRetryDelayMs));
+    }
+    vTaskDelete(nullptr);
 }
 
 void install_uart_console_driver() {
@@ -158,26 +208,27 @@ extern "C" void app_main(void) {
     if (ret != ESP_OK) {
         ESP_LOGW(TAG, "WiFi init failed: %s — continuing with serial only", esp_err_to_name(ret));
     } else {
-        const WifiConnectResult r = g_wifi_manager.auto_connect_blocking(kConnectTimeoutMs);
-        if (r == WifiConnectResult::Ok) {
-            char ssid[33] = {};
-            char ip[16] = {};
-            g_wifi_manager.get_connected_ssid(ssid, sizeof(ssid));
-            g_wifi_manager.get_ip_string(ip, sizeof(ip));
-            ESP_LOGI(TAG, "Online: ssid=\"%s\" ip=%s", ssid, ip);
-
-            ret = tcp_server_start(kTcpPort);
-            if (ret != ESP_OK) {
-                ESP_LOGW(TAG, "TCP server failed to start: %s", esp_err_to_name(ret));
-            }
-            ret = discovery_start(kTcpPort);
-            if (ret != ESP_OK) {
-                ESP_LOGW(TAG, "Discovery failed to start: %s", esp_err_to_name(ret));
-            }
-        } else {
-            ESP_LOGW(TAG, "Boot-time connection failed (%s) — waiting for serial config",
-                     WifiManager::result_to_string(r));
+        // Connect (and keep retrying) in the background so the sensor loop and
+        // local CSV start immediately even if the network is down at boot.
+        BaseType_t wifi_task_ok = xTaskCreate(
+            wifi_connect_task,
+            "wifi_connect",
+            kWifiConnectStackSize,
+            nullptr,
+            kWifiConnectTaskPriority,
+            nullptr
+        );
+        if (wifi_task_ok != pdPASS) {
+            ESP_LOGE(TAG, "Failed to create wifi connect task");
         }
+    }
+
+    // Start the cloud telemetry worker. It waits on its queue and only uploads
+    // once WiFi is up (dual-write alongside the local CSV / TCP stream).
+    ret = supabase_client_start();
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Telemetry worker failed to start: %s — cloud uploads disabled",
+                 esp_err_to_name(ret));
     }
 
     // Print only the CSV header at boot so columns are labeled; each new row

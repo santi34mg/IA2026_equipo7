@@ -8,7 +8,11 @@ setlocal
 set PORT=%1
 if "%PORT%"=="" set PORT=COM3
 
-python -m esptool ^
+REM Prefer the project's venv esptool; fall back to the global python.
+set PYEXE=python
+if exist "%~dp0..\.venv\Scripts\python.exe" set PYEXE="%~dp0..\.venv\Scripts\python.exe"
+
+%PYEXE% -m esptool ^
   --chip esp32 ^
   -p %PORT% ^
   -b 460800 ^
@@ -18,8 +22,8 @@ python -m esptool ^
   --flash-mode dio ^
   --flash-size 2MB ^
   --flash-freq 40m ^
-  0x1000  "%~dp0embedded\build\bootloader\bootloader.bin" ^
-  0x8000  "%~dp0embedded\build\partition_table\partition-table.bin" ^
-  0x10000 "%~dp0embedded\build\embedded.bin"
+  0x1000  "%~dp0..\embedded\build\bootloader\bootloader.bin" ^
+  0x8000  "%~dp0..\embedded\build\partition_table\partition-table.bin" ^
+  0x10000 "%~dp0..\embedded\build\embedded.bin"
 
 endlocal

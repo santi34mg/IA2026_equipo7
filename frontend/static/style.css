@@ -663,7 +663,16 @@ select.input-wide {
   border: 1px solid var(--border);
 }
 
-/* ── Live predictions ────────────────────────────────────────────────── */
+/* ── Live readings + predictions ─────────────────────────────────────── */
+.live-values {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+}
+
 .live-grid {
   display: flex;
   flex-wrap: wrap;

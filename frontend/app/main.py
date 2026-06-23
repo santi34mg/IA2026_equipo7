@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from .analysis import MODELS_DIR, AnalysisService
 from .firmware import firmware_status, validate_firmware
@@ -21,10 +22,24 @@ from .ports import _mock_ports, list_serial_ports, port_exists
 from .session import SessionManager
 from .ws_bus import WSBus
 
+# Load a local, git-ignored .env if present (Supabase URL + anon key for local
+# dev). On Vercel these come from project env vars, so this is a harmless no-op.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 LINUX_DATA_DIR = Path("/tmp/proyectoIA")
 MOCK = os.environ.get("FRONTEND_MOCK", "").lower() in ("1", "true", "yes")
+
+
+class PredictRequest(BaseModel):
+    temperatura: float
+    luz: float
+    humedad_suelo: float
 
 
 def _suggested_directory() -> Path:
@@ -50,6 +65,18 @@ def create_app() -> FastAPI:
     @app.get("/", include_in_schema=False)
     async def index() -> FileResponse:
         return FileResponse(str(STATIC_DIR / "index.html"))
+
+    @app.get("/api/config")
+    async def get_config() -> JSONResponse:
+        """Public client config for the browser: Supabase URL + anon key.
+
+        Read from env (Vercel project settings). The anon key is public by
+        design; the browser uses it to read sensor_readings directly.
+        """
+        return JSONResponse({
+            "supabase_url": os.environ.get("SUPABASE_URL", ""),
+            "supabase_anon_key": os.environ.get("SUPABASE_ANON_KEY", ""),
+        })
 
     @app.get("/api/ports", response_model=PortsResponse)
     async def get_ports() -> PortsResponse:
@@ -102,6 +129,22 @@ def create_app() -> FastAPI:
                 content={"detail": "Models not loaded. Run eda/modelo.ipynb first."},
             )
         return JSONResponse(svc.metrics)
+
+    @app.post("/api/predict")
+    async def predict(req: PredictRequest) -> JSONResponse:
+        """Stateless multi-model prediction for one reading.
+
+        The browser calls this for each new Supabase row to fill the live
+        multi-model grid. Reuses AnalysisService.predict_all (same path as the
+        local recording session)."""
+        svc: AnalysisService = app.state.analysis
+        if not svc.available:
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "Models not loaded. Run eda/modelo.ipynb first."},
+            )
+        preds = svc.predict_all([req.temperatura, req.luz, req.humedad_suelo])
+        return JSONResponse({"predictions": preds})
 
     @app.get("/api/eda/plots")
     async def list_eda_plots() -> JSONResponse:

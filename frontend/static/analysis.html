@@ -43,15 +43,31 @@
       <div id="confusionGrid" class="confusion-grid"></div>
     </section>
 
+    <!-- Live readings from Supabase -->
+    <section class="card" id="liveReadingsSection" style="display:none">
+      <h2>Lecturas en Vivo</h2>
+      <p class="hint">Datos en tiempo real desde Supabase — el ESP32 sube cada lectura.</p>
+      <div id="liveValues" class="live-values">
+        <span>Temp: <b id="lvTemp">—</b> °C</span>
+        <span>Luz: <b id="lvLuz">—</b></span>
+        <span>Humedad suelo: <b id="lvHum">—</b></span>
+        <span class="prediction-badge" id="lvLabel" style="margin-left:auto">—</span>
+      </div>
+      <canvas id="liveChart" width="640" height="160"
+              style="width:100%;max-width:640px;margin-top:.75rem;"></canvas>
+    </section>
+
     <!-- Live multi-predict -->
     <section class="card">
       <h2>Predicciones Live</h2>
-      <p class="hint">Iniciá una sesión de medición en la página principal para ver las predicciones de todos los modelos en tiempo real.</p>
-      <div id="liveStatus" class="hint" style="color:#888;">Sin sesión activa.</div>
+      <p class="hint">Predicciones de todos los modelos para cada lectura nueva, en tiempo real.</p>
+      <div id="liveStatus" class="hint" style="color:#888;">Esperando datos…</div>
       <div id="liveGrid" class="live-grid" style="display:none"></div>
     </section>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/static/supabase.js"></script>
   <script src="/static/analysis.js"></script>
 </body>
 </html>

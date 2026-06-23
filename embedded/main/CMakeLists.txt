@@ -10,6 +10,7 @@ idf_component_register(
         "wifi_manager.cpp"
         "tcp_server.cpp"
         "discovery.cpp"
+        "supabase_client.cpp"
     INCLUDE_DIRS "."
     REQUIRES
         esp_driver_gpio
@@ -25,4 +26,6 @@ idf_component_register(
         esp_driver_uart
         vfs
         lwip
+        esp_http_client
+        esp-tls
 )
