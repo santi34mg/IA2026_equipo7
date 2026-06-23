@@ -82,6 +82,7 @@ async function handleStart(botToken: string, chatId: number) {
       `si necesito riego urgente. 💧\n\n` +
       `*Comandos disponibles:*\n` +
       `/estado — Ver mi estado actual\n` +
+      `/clear — Borrar nuestra conversación y empezar de cero\n` +
       `/ayuda — Mostrar esta ayuda\n\n` +
       `O simplemente pregúntame algo sobre cómo estoy o qué necesito 🌱`
   );
@@ -94,6 +95,7 @@ async function handleAyuda(botToken: string, chatId: number) {
     `🌿 *${PLANT_NAME} — Comandos disponibles* 🌿\n\n` +
       `/start — Iniciar el bot y registrarte para recibir mis reportes\n` +
       `/estado — Ver mis lecturas de sensores en este momento\n` +
+      `/clear — Borrar nuestra conversación y empezar de cero\n` +
       `/ayuda — Mostrar esta ayuda\n\n` +
       `*También puedes preguntarme cosas como:*\n` +
       `• ¿Cómo estás, Olivia?\n` +
@@ -102,6 +104,15 @@ async function handleAyuda(botToken: string, chatId: number) {
       `• ¿Qué cuidados necesitás esta semana?\n` +
       `• ¿Por qué tus hojas están amarillas?\n\n` +
       `_Recuerdo: solo puedo hablar sobre temas relacionados con plantas y mi cuidado_ 🍃`
+  );
+}
+
+async function handleClear(botToken: string, chatId: number) {
+  await supabase().from("conversation_history").delete().eq("chat_id", chatId);
+  await sendMessage(
+    botToken,
+    chatId,
+    "Listo, empecé de cero 🌱 Olvidé nuestra charla anterior. ¿De qué querés hablar?"
   );
 }
 
@@ -230,6 +241,8 @@ Deno.serve(async (req) => {
       await handleAyuda(botToken, chatId);
     } else if (text === "/estado" || text.startsWith("/estado ")) {
       await handleEstado(botToken, chatId);
+    } else if (text === "/clear" || text.startsWith("/clear ")) {
+      await handleClear(botToken, chatId);
     } else if (!text.startsWith("/")) {
       await handleMessage(botToken, chatId, text);
     }
