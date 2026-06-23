@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Flora — En Vivo</title>
+  <title>Olivia — En Vivo</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -13,23 +13,47 @@
   <div class="container">
     <header>
       <span class="brand-leaf" aria-hidden="true">🌿</span>
-      <h1>Flora — En Vivo</h1>
+      <h1>Olivia</h1>
       <a href="/analysis" class="btn btn-secondary" style="text-decoration:none">Análisis →</a>
     </header>
 
-    <section class="card">
-      <h2>Lectura Actual</h2>
-      <p class="hint">Datos en tiempo real desde Supabase — el ESP32 sube cada lectura.</p>
-      <p class="hint" id="liveStatus" style="color:#888;">Conectando a Supabase…</p>
-      <div id="liveValues" class="live-values" style="display:none">
-        <span>Temp: <b id="lvTemp">—</b> °C</span>
-        <span>Luz: <b id="lvLuz">—</b></span>
-        <span>Humedad suelo: <b id="lvHum">—</b></span>
-        <span class="prediction-badge" id="lvLabel" style="margin-left:auto">—</span>
+    <!-- Estado actual (hero) -->
+    <section class="card status-hero">
+      <div class="status-live"><span class="pulse-dot" id="pulseDot" aria-hidden="true"></span> <span id="liveLabel">En vivo · actualiza cada 15s</span></div>
+      <div class="status-emoji" id="statusEmoji">🌿</div>
+      <div class="prediction-badge status-label" id="lvLabel">—</div>
+      <p class="status-msg" id="statusMsg">Conectando a Supabase…</p>
+      <p class="hint" id="lvTime"></p>
+    </section>
+
+    <!-- Temperatura -->
+    <section class="card metric-panel">
+      <div class="metric-head">
+        <span class="metric-head-icon" aria-hidden="true">🌡️</span>
+        <span class="metric-head-name">Temperatura</span>
+        <span class="metric-head-value"><b id="lvTemp">—</b> °C</span>
       </div>
-      <p class="hint" id="lvTime" style="margin-top:.5rem;"></p>
-      <canvas id="liveChart" width="640" height="180"
-              style="width:100%;max-width:640px;margin-top:.75rem;"></canvas>
+      <canvas id="chartTemp" class="metric-chart" width="700" height="130"></canvas>
+    </section>
+
+    <!-- Luz -->
+    <section class="card metric-panel">
+      <div class="metric-head">
+        <span class="metric-head-icon" aria-hidden="true">☀️</span>
+        <span class="metric-head-name">Luz</span>
+        <span class="metric-head-value"><b id="lvLuz">—</b> raw</span>
+      </div>
+      <canvas id="chartLuz" class="metric-chart" width="700" height="130"></canvas>
+    </section>
+
+    <!-- Humedad del suelo -->
+    <section class="card metric-panel">
+      <div class="metric-head">
+        <span class="metric-head-icon" aria-hidden="true">💧</span>
+        <span class="metric-head-name">Humedad del suelo</span>
+        <span class="metric-head-value"><b id="lvHum">—</b> raw</span>
+      </div>
+      <canvas id="chartHum" class="metric-chart" width="700" height="130"></canvas>
     </section>
   </div>
 

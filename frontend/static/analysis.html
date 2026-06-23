@@ -43,26 +43,12 @@
       <div id="confusionGrid" class="confusion-grid"></div>
     </section>
 
-    <!-- Live readings from Supabase -->
-    <section class="card" id="liveReadingsSection" style="display:none">
-      <h2>Lecturas en Vivo</h2>
-      <p class="hint">Datos en tiempo real desde Supabase — el ESP32 sube cada lectura.</p>
-      <div id="liveValues" class="live-values">
-        <span>Temp: <b id="lvTemp">—</b> °C</span>
-        <span>Luz: <b id="lvLuz">—</b></span>
-        <span>Humedad suelo: <b id="lvHum">—</b></span>
-        <span class="prediction-badge" id="lvLabel" style="margin-left:auto">—</span>
-      </div>
-      <canvas id="liveChart" width="640" height="160"
-              style="width:100%;max-width:640px;margin-top:.75rem;"></canvas>
-    </section>
-
-    <!-- Live multi-predict -->
+    <!-- Predicción de los modelos (en vivo desde Supabase, cada 15s) -->
     <section class="card">
-      <h2>Predicciones Live</h2>
-      <p class="hint">Predicciones de todos los modelos para cada lectura nueva, en tiempo real.</p>
-      <div id="liveStatus" class="hint" style="color:#888;">Esperando datos…</div>
-      <div id="liveGrid" class="live-grid" style="display:none"></div>
+      <h2>Predicción de los Modelos</h2>
+      <p class="hint">Lo que cada modelo predice para la última lectura de Supabase. Actualiza cada 15s.</p>
+      <div id="predStatus" class="hint" style="color:#888;">Esperando lecturas…</div>
+      <div id="predGrid" class="live-grid"></div>
     </section>
   </div>
 
